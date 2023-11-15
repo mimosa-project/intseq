@@ -7,7 +7,7 @@ Handle integer sequences
 
     ```bash
     curl -sSf https://rye-up.com/get | bash
-    echo 'source "$HOME/.rye/shims"' >> ~/.profile
+    echo 'export PATH="$HOME/.rye/shims:$PATH"' >> ~/.profile
     ```
 
 2. Sync all
