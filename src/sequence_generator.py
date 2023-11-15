@@ -125,35 +125,8 @@ class Loop2(Program):
         return self.fn
 
 class Compr(Program):
-    compr_cache = {}
-
     @staticmethod
-    def compr_impl(f: Callable[[int, int], int], a: int):
-        if a < 0:
-            raise Exception('compr error')
-
-        for current_a in range(a + 1):
-            if (f, current_a) in Compr.compr_cache:
-                continue
-
-            m = 0
-            if current_a == 0:
-                while True:
-                    if f(m, 0) <= 0:
-                        Compr.compr_cache[(f, current_a)] = m
-                        break
-                    m += 1
-            else:
-                prev_m = Compr.compr_cache[(f, current_a - 1)]
-                while True:
-                    if m > prev_m and f(m, 0) <= 0:
-                        Compr.compr_cache[(f, current_a)] = m
-                        break
-                    m += 1
-
-        return Compr.compr_cache[(f, a)]
-
-    def compr_impl2(f:Callable[[int, int], int], a:int):
+    def compr_impl(f:Callable[[int, int], int], a:int):
         if a == 0:
             m = 0
             while True:
@@ -163,7 +136,7 @@ class Compr(Program):
         elif a > 0:
             m = 0
             while True:
-                if m > Compr.compr_impl2(f, a-1) and f(m, 0) <= 0:
+                if m > Compr.compr_impl(f, a-1) and f(m, 0) <= 0:
                     return m
                 m += 1
         else:
