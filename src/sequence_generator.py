@@ -208,7 +208,7 @@ class Mod(Program):
         return self.fn
 
 class ProgramStack:
-    STR2RPN_LIST = ['0', '1', '2', 'plus', 'minus', 'multiply', 'div', 'mod', 'cond', 'loop', 'x', 'y', 'compr', 'loop2']
+    STR2RPN_LIST = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N']
 
     def __init__(self, rpn):
         self.rpn = rpn
@@ -220,48 +220,54 @@ class ProgramStack:
 
     def build(self):
         for s in self.rpn:
-            if isinstance(s, int) or s in ['0', '1', '2']:
-                self.stack.append(Constant(int(s)))
-            elif s in ['x', 'y']:
-                self.stack.append(Variable(s))
-            elif s == 'cond':
+            if s == 'A':
+                self.stack.append(Constant(0))
+            elif s == 'B':
+                self.stack.append(Constant(1))
+            elif s == 'C':
+                self.stack.append(Constant(2))
+            elif s == 'K':
+                self.stack.append(Variable('x'))
+            elif s == 'L':
+                self.stack.append(Variable('y'))
+            elif s == 'I':
                 c = self.stack.pop()
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Cond(a=a, b=b, c=c))
-            elif s == 'loop':
+            elif s == 'J':
                 b = self.stack.pop()
                 a = self.stack.pop()
                 f = self.stack.pop()
                 self.stack.append(Loop(f=f, a=a, b=b))
-            elif s == 'loop2':
+            elif s == 'N':
                 c = self.stack.pop()
                 b = self.stack.pop()
                 a = self.stack.pop()
                 g = self.stack.pop()
                 f = self.stack.pop()
                 self.stack.append(Loop2(f=f, g=g, a=a, b=b, c=c))
-            elif s == 'compr':
+            elif s == 'M':
                 a = self.stack.pop()
                 f = self.stack.pop()
                 self.stack.append(Compr(f=f, a=a))
-            elif s == 'plus':
+            elif s == 'D':
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Plus(a=a, b=b))
-            elif s == 'minus':
+            elif s == 'E':
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Minus(a=a, b=b))
-            elif s == 'multiply':
+            elif s == 'F':
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Multiply(a=a, b=b))
-            elif s == 'division':
+            elif s == 'G':
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Division(a=a, b=b))
-            elif s == 'mod':
+            elif s == 'H':
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Mod(a=a, b=b))
