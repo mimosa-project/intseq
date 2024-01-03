@@ -22,7 +22,7 @@ for i in range(2, 100):
 
 class ProgramGenerator(): 
     # トークンに応じた count の変化量を dict で定義
-    POINT_OF_COUNT={'A':1, 'B':1, 'C':1, 'D':-1, 'E':-1, 'F':-1, 'G':-1, 'H':-1, 'I':-2, 'J':-2, 'K':1, 'L':1, 'M':-1, 'N':-4}
+    VARIATION_OF_PROGRAM_NUM={'A':1, 'B':1, 'C':1, 'D':-1, 'E':-1, 'F':-1, 'G':-1, 'H':-1, 'I':-2, 'J':-2, 'K':1, 'L':1, 'M':-1, 'N':-4}
     # 上記のプログラムの dict をクラス変数に
     VARIATION_OF_LETTER=variation_of_letter
     VARIATION_OF_LETTER_REDUCING_PROGRAM_NUM=variation_of_letter_reducing_program_num
