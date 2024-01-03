@@ -47,10 +47,10 @@ class ProgramGenerator():
             return random.choice(self.VARIATION_OF_LETTER[min_variation]), math.log(len(self.VARIATION_OF_LETTER[min_variation]), 2)
         else:
             return random.choice(self.VARIATION_OF_LETTER_REDUCING_PROGRAM_NUM[min_variation]), math.log(len(self.VARIATION_OF_LETTER_REDUCING_PROGRAM_NUM[min_variation]), 2)
-    
+
+# program_numを減らす場合にするために、max_variation_of_program_num を変更
     def change_max_variation_of_program_num(self):
         self.max_variation_of_program_num=-1
-        self.letter_of_choice={}
 
     def add_information_amount(self, information_amount):
         self.information_amount+=information_amount
