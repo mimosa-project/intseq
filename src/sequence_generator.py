@@ -126,19 +126,21 @@ class Loop2(Program):
 
 class Compr(Program):
     @staticmethod
-    def compr_impl(f:Callable[[int, int], int], a:int):
+    def compr_impl(f:Callable[[int, int], int], a:int, max_iter:int):
         if a == 0:
             m = 0
-            while True:
+            while m < max_iter:
                 if f(m, 0) <= 0:
                     return m
                 m += 1
+            raise Exception('compr_impl reached max_iter')
         elif a > 0:
             m = 0
-            while True:
-                if m > Compr.compr_impl(f, a-1) and f(m, 0) <= 0:
+            while m < max_iter:
+                if m > Compr.compr_impl(f, a-1, max_iter) and f(m, 0) <= 0:
                     return m
                 m += 1
+            raise Exception('compr_impl reached max_iter')
         else:
             raise Exception('compr error')
 
@@ -149,7 +151,9 @@ class Compr(Program):
         ff = self.sub_programs['f'].build()
         fa = self.sub_programs['a'].build()
         
-        self.fn = lambda x, y: self.compr_impl(ff, fa(x,y))
+        max_iter=100
+        
+        self.fn = lambda x, y: self.compr_impl(ff, fa(x,y), max_iter)
         return self.fn
     
 class Plus(Program):
@@ -192,7 +196,9 @@ class Division(Program):
         
         fa = self.sub_programs['a'].build()
         fb = self.sub_programs['b'].build()
-        
+
+        if lambda x, y: fb(x,y)==0:
+            raise Exception("Division by zero")
         self.fn = lambda x, y: fa(x,y) // fb(x,y)
         return self.fn
 
@@ -203,7 +209,9 @@ class Mod(Program):
         
         fa = self.sub_programs['a'].build()
         fb = self.sub_programs['b'].build()
-        
+
+        if lambda x, y: fb(x,y)==0:
+            raise Exception("Mod by zero")
         self.fn = lambda x, y: fa(x,y) % fb(x,y)
         return self.fn
 
@@ -211,7 +219,7 @@ class ProgramStack:
     STR2RPN_LIST = ['0', '1', '2', 'plus', 'minus', 'multiply', 'div', 'mod', 'cond', 'loop', 'x', 'y', 'compr', 'loop2']
 
     def __init__(self, rpn):
-        self.rpn = rpn
+        self.rpn = self.str2rpn(rpn)
         self.stack = []
     
     @staticmethod
