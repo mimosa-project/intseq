@@ -84,13 +84,16 @@ def generate():
 
 def sorting():
     while(True):
-        sequence=[]
-        information_amount=0
-        sequence, information_amount=generate()
-        ps=sequence_generator.ProgramStack(sequence)
-        stack=ps.build()
-        if 'y' not in stack[0].find_free_variables():#束縛変数にyが含まれない
-            if not stack[0].calc(1, 0)==stack[0].calc(10, 0):#数列に変化量がある
-                break
+        try:
+            sequence=[]
+            information_amount=0
+            sequence, information_amount=generate()
+            ps=sequence_generator.ProgramStack(sequence)
+            stack=ps.build()
+            if 'y' not in stack[0].find_free_variables():#束縛変数にyが含まれない
+                if not stack[0].calc(1, 0)==stack[0].calc(10, 0):#数列に変化量がある
+                    break
+        except Exception:
+            continue
 
     return sequence, information_amount
