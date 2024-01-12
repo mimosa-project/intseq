@@ -27,11 +27,6 @@ class ProgramGenerator():
         
         return random.choice(letters), math.log(len(letters), 2)
 
-        
-# program_numを減らす場合にするために、max_variation_of_program_num を変更
-    def change_max_variation_of_program_num(self):
-        self.max_variation_of_program_num=-1
-
     def add_information_amount(self, information_amount):
         self.information_amount+=information_amount
     
