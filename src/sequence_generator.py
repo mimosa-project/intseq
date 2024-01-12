@@ -211,7 +211,7 @@ class ProgramStack:
     STR2RPN_LIST = ['0', '1', '2', 'plus', 'minus', 'multiply', 'div', 'mod', 'cond', 'loop', 'x', 'y', 'compr', 'loop2']
 
     def __init__(self, rpn):
-        self.rpn = rpn
+        self.rpn = self.str2rpn(rpn)
         self.stack = []
     
     @staticmethod
@@ -257,7 +257,7 @@ class ProgramStack:
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Multiply(a=a, b=b))
-            elif s == 'division':
+            elif s == 'div':
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(Division(a=a, b=b))
