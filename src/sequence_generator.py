@@ -129,18 +129,22 @@ class Loop2(Program):
         return self.fn
 
 class Compr(Program):
+    def __init__(self, max_iter=-1, **kwarg: Dict[str, Program]):
+        super().__init__(**kwarg)
+        self.max_iter = max_iter
+
     @staticmethod
     def compr_impl(f:Callable[[int, int], int], a:int, max_iter:int) -> int:
         if a == 0:
             m = 0
-            while m < max_iter:
+            while m < max_iter or m > max_iter:
                 if f(m, 0) <= 0:
                     return m
                 m += 1
             raise Exception('compr_impl reached max_iter')
         elif a > 0:
             m = 0
-            while m < max_iter:
+            while m < max_iter or m > max_iter:
                 if m > Compr.compr_impl(f, a-1, max_iter) and f(m, 0) <= 0:
                     return m
                 m += 1
@@ -155,9 +159,7 @@ class Compr(Program):
         ff = self.sub_programs['f'].build()
         fa = self.sub_programs['a'].build()
 
-        max_iter = 10
-
-        self.fn = lambda x, y: self.compr_impl(ff, fa(x,y), max_iter)
+        self.fn = lambda x, y: self.compr_impl(ff, fa(x,y), self.max_iter)
         return self.fn
     
 class Plus(Program):
@@ -222,9 +224,10 @@ class Mod(Program):
 class ProgramStack:
     STR2RPN_LIST = ['0', '1', '2', 'plus', 'minus', 'multiply', 'div', 'mod', 'cond', 'loop', 'x', 'y', 'compr', 'loop2']
 
-    def __init__(self, rpn):
-        self.rpn = self.str2rpn(rpn)
+    def __init__(self, rpn, max_iter=None):
+        self.rpn = rpn
         self.stack = []
+        self.max_iter=max_iter
     
     @staticmethod
     def str2rpn(str):
@@ -254,9 +257,14 @@ class ProgramStack:
                 f = self.stack.pop()
                 self.stack.append(Loop2(f=f, g=g, a=a, b=b, c=c))
             elif s == 'compr':
-                a = self.stack.pop()
-                f = self.stack.pop()
-                self.stack.append(Compr(f=f, a=a))
+                if self.max_iter:
+                    a = self.stack.pop()
+                    f = self.stack.pop()
+                    self.stack.append(Compr(f=f, a=a, max_iter=self.max_iter))
+                else:
+                    a = self.stack.pop()
+                    f = self.stack.pop()
+                    self.stack.append(Compr(f=f, a=a))
             elif s == 'plus':
                 b = self.stack.pop()
                 a = self.stack.pop()
