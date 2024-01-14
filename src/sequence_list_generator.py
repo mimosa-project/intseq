@@ -3,7 +3,6 @@ import random
 import math
 import sequence_generator
 
-
 class ProgramGenerator(): 
     # トークンに応じた program_num の変化量を dict で定義
     VARIATION_OF_PROGRAM_NUM={'A':1, 'B':1, 'C':1, 'D':-1, 'E':-1, 'F':-1, 'G':-1, 'H':-1, 'I':-2, 'J':-2, 'K':1, 'L':1, 'M':-1, 'N':-4}
@@ -12,7 +11,7 @@ class ProgramGenerator():
         self.program_num=0 #リストをProgramStack()でオブジェクト化した時の要素数
         self.sequence=[]
         self.information_amount=0 #複雑度
-    
+
     def append_letter(self, max_variation=1):
         letter, information_amount= self.generate_random_letter(1-self.program_num, max_variation)
         self.sequence.append(letter)
