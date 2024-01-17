@@ -7,6 +7,7 @@ import program
 class ProgramGenerator(): 
     # トークンに応じた program_num の変化量を dict で定義
     VARIATION_OF_PROGRAM_NUM={'A':1, 'B':1, 'C':1, 'D':-1, 'E':-1, 'F':-1, 'G':-1, 'H':-1, 'I':-2, 'J':-2, 'K':1, 'L':1, 'M':-1, 'N':-4}
+    LETTER_TO_VARIATION = {'A':1, 'B':1, 'C':1, 'D':-1, 'E':-1, 'F':-1, 'G':-1, 'H':-1, 'I':-2, 'J':-2, 'K':1, 'L':1, 'M':-1, 'N':-4}
     
     def __init__(self):
         self.program_num=0 #リストをProgramStack()でオブジェクト化した時の要素数
@@ -20,9 +21,8 @@ class ProgramGenerator():
         self.add_information_amount(information_amount)
 
     def generate_random_letter(self, min_variation, max_variation):
-        letter2variation = {'A':1, 'B':1, 'C':1, 'D':-1, 'E':-1, 'F':-1, 'G':-1, 'H':-1, 'I':-2, 'J':-2, 'K':1, 'L':1, 'M':-1, 'N':-4}
         letters=[]
-        for k, v in letter2variation.items():    
+        for k, v in self.LETTER_TO_VARIATION.item():
             if min_variation <= v <= max_variation:
                 letters.append(k)
         
