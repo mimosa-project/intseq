@@ -58,7 +58,7 @@ def generate(max_num_of_loops):
     
     return sequence.sequence_info(), sequence.information_amount_info()
 
-# 必要な数列を選別
+# 適切な数列を選別
 def select_sequence(max_num_of_loops, max_iter=-1):
     while(True):
         try:
@@ -67,7 +67,7 @@ def select_sequence(max_num_of_loops, max_iter=-1):
             sequence, information_amount=generate(max_num_of_loops)
             ps=program.ProgramStack(program.ProgramStack.str2rpn(sequence), max_iter)
             stack=ps.build()
-            if check_if_y_is_bound(stack) and not check_if_constant_sequence(stack) and not check_if_arithmetic_progression(stack):
+            if check_if_y_is_bound(stack) and not check_if_constant_sequence(stack) and not check_if_trivial_arithmetic_progression(stack):
                 return sequence, information_amount
             
         except Exception:
@@ -84,9 +84,8 @@ def check_if_constant_sequence(stack):
             return False
     return True
 
-
 # 初項0、公差1の等差数列(0,1,2,...)かどうかチェック
-def check_if_arithmetic_progression(stack):
+def check_if_trivial_arithmetic_progression(stack):
     for i in range(0, 10):
         if(stack[0].calc(i, 0) != i):
             return False
