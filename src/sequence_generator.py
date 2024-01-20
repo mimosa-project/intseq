@@ -1,7 +1,9 @@
 #A=0 B=1 C=2 D=+ E=- F=* G=div H=mod I=cond J=loop K=x L=y M=compr N=loop2
 import random
 import math
-import program
+import sys
+sys.path.append('../intseq')
+from src import program
 
 
 class ProgramGenerator(): 
