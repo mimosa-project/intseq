@@ -9,6 +9,12 @@ from src import program
 class ProgramGenerator(): 
     # トークンに応じた program_num の変化量を dict で定義
     VARIATION_OF_PROGRAM_NUM={'A':1, 'B':1, 'C':1, 'D':-1, 'E':-1, 'F':-1, 'G':-1, 'H':-1, 'I':-2, 'J':-2, 'K':1, 'L':1, 'M':-1, 'N':-4}
+    # generate_random_letterでできたリストをメモ
+    MEMO_LETTERS={}
+
+    @classmethod
+    def remember_letters(cls, tuple, letters):
+        cls.MEMO_LETTERS[tuple]=letters
     
     def __init__(self):
         self.program_num=0 #リストをProgramStack()でオブジェクト化した時の要素数
@@ -22,12 +28,18 @@ class ProgramGenerator():
         self.add_information_amount(information_amount)
 
     def generate_random_letter(self, min_variation, max_variation):
-        letters=[]
-        for k, v in self.VARIATION_OF_PROGRAM_NUM.items():
-            if min_variation <= v <= max_variation:
-                letters.append(k)
+        key=(min_variation, max_variation)
+        if key in self.MEMO_LETTERS:
+            return random.choice(self.MEMO_LETTERS[key]), math.log(len(self.MEMO_LETTERS[key]), 2)
+        else:
+            letters=[]
+            for k, v in self.VARIATION_OF_PROGRAM_NUM.items():
+                if min_variation <= v <= max_variation:
+                    letters.append(k)
+            
+            ProgramGenerator.remember_letters(key, letters)
         
-        return random.choice(letters), math.log(len(letters), 2)
+            return random.choice(letters), math.log(len(letters), 2)
 
     def add_information_amount(self, information_amount):
         self.information_amount+=information_amount
