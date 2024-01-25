@@ -30,7 +30,7 @@ class ProgramGenerator():
     def generate_random_letter(self, min_variation, max_variation):
         key=(min_variation, max_variation)
         if key in self.MEMO_LETTERS:
-            return random.choice(self.MEMO_LETTERS[key]), math.log(len(self.MEMO_LETTERS[key]), 2)
+            letters=self.MEMO_LETTERS[key]
         else:
             letters=[]
             for k, v in self.VARIATION_OF_PROGRAM_NUM.items():
@@ -39,7 +39,7 @@ class ProgramGenerator():
             
             ProgramGenerator.remember_letters(key, letters)
         
-            return random.choice(letters), math.log(len(letters), 2)
+        return random.choice(letters), math.log(len(letters), 2)
 
     def add_information_amount(self, information_amount):
         self.information_amount+=information_amount
