@@ -30,9 +30,9 @@ if __name__ == "__main__":
     profiler.disable()
 
     # 保存
-    profiler.dump_stats('profiles/profile_data.prof')
+    profiler.dump_stats('profiles/profile_data_after_correcting_generate_random_letter.prof')
 
     # 数列サンプルを保存
-    with open('profiles/use_select_sequence.txt', 'w') as file:
+    with open('profiles/after_correcting_generate_random_letter.txt', 'w') as file:
         for num in range(100):
             file.write(f"{sequence_list[num]}\n")

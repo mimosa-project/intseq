@@ -1,0 +1,74 @@
+Thu Jan 25 19:10:25 2024    profiles/profile_data_after_correcting_generate_random_letter.prof
+
+         31877092 function calls (29152756 primitive calls) in 9.985 seconds
+
+   Ordered by: internal time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    25302    1.426    0.000    3.546    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:238(build)
+  1312141    1.113    0.000    4.407    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:24(append_letter)
+  1312141    1.001    0.000    2.714    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:30(generate_random_letter)
+1786422/118294    0.810    0.000    0.987    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:20(bind)
+1023201/25202    0.658    0.000    0.728    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:24(find_free_variables)
+  1337343    0.573    0.000    0.817    0.000 /usr/lib/python3.8/random.py:250(_randbelow_with_getrandbits)
+  1312141    0.504    0.000    1.390    0.000 /usr/lib/python3.8/random.py:285(choice)
+    25202    0.400    0.000    4.905    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:60(generate)
+  1312817    0.369    0.000    1.359    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:5(__init__)
+    25302    0.297    0.000    0.426    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:236(<listcomp>)
+  1312141    0.272    0.000    0.272    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:47(update_program_num)
+  1312141    0.233    0.000    0.233    0.000 {built-in method math.log}
+  2626408    0.224    0.000    0.224    0.000 {method 'append' of 'list' objects}
+      100    0.216    0.002    9.979    0.100 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:75(select_sequence)
+   433451    0.206    0.000    0.310    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:35(__init__)
+  1312141    0.192    0.000    0.192    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:44(add_information_amount)
+  2624282    0.186    0.000    0.186    0.000 {built-in method builtins.len}
+  2809623    0.177    0.000    0.177    0.000 {method 'values' of 'dict' objects}
+  1871335    0.150    0.000    0.150    0.000 {method 'getrandbits' of '_random.Random' objects}
+   289221    0.145    0.000    0.214    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:47(__init__)
+  2625634    0.129    0.000    0.129    0.000 {built-in method builtins.ord}
+  1312817    0.115    0.000    0.115    0.000 {built-in method builtins.isinstance}
+  1287515    0.112    0.000    0.112    0.000 {method 'pop' of 'list' objects}
+  1337343    0.094    0.000    0.094    0.000 {method 'bit_length' of 'int' objects}
+   527296    0.065    0.000    0.065    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:62(bind)
+    83394    0.061    0.000    0.732    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:132(__init__)
+    25202    0.028    0.000    0.055    0.000 /usr/lib/python3.8/random.py:200(randrange)
+    25202    0.019    0.000    0.074    0.000 /usr/lib/python3.8/random.py:244(randint)
+    25202    0.018    0.000    0.746    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:90(check_if_y_is_bound)
+    25302    0.016    0.000    0.442    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:234(str2rpn)
+     7727    0.013    0.000    0.114    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:94(check_if_constant_sequence)
+    83394    0.012    0.000    0.012    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:164(update_max_iter)
+16730/6652    0.012    0.000    0.064    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:154(build)
+13279/5682    0.011    0.000    0.051    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:214(build)
+13769/5690    0.011    0.000    0.051    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:201(build)
+14717/6883    0.010    0.000    0.052    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:168(build)
+    25302    0.010    0.000    0.010    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:229(__init__)
+    25202    0.010    0.000    0.010    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:19(__init__)
+14788/6961    0.010    0.000    0.052    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:190(build)
+14703/6907    0.009    0.000    0.051    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:179(build)
+    12906    0.009    0.000    0.106    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:17(calc)
+    58981    0.008    0.000    0.008    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:50(program_num_info)
+    80190    0.008    0.000    0.008    0.000 {method 'add' of 'set' objects}
+8463/5274    0.006    0.000    0.042    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:95(build)
+7183/4610    0.005    0.000    0.035    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:73(build)
+    25237    0.004    0.000    0.004    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:40(build)
+    25202    0.003    0.000    0.003    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:53(sequence_info)
+1119/1039    0.003    0.000    0.004    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:136(compr_impl)
+    25202    0.003    0.000    0.003    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:56(information_amount_info)
+    15420    0.002    0.000    0.002    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:53(build)
+    21215    0.002    0.000    0.002    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:43(calc)
+1831/1630    0.002    0.000    0.014    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:118(build)
+3236/2682    0.001    0.000    0.004    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:186(<lambda>)
+3154/2651    0.001    0.000    0.004    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:197(<lambda>)
+2961/2438    0.001    0.000    0.004    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:175(<lambda>)
+1894/1341    0.001    0.000    0.005    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:103(<lambda>)
+1403/1216    0.001    0.000    0.004    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:81(<lambda>)
+     8892    0.001    0.000    0.001    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:56(calc)
+1880/1377    0.001    0.000    0.003    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:86(loop_impl)
+1146/1016    0.001    0.000    0.005    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:161(<lambda>)
+      175    0.000    0.000    0.002    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:101(check_if_trivial_arithmetic_progression)
+  295/293    0.000    0.000    0.001    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:128(<lambda>)
+     1380    0.000    0.000    0.000    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:66(cond_impl)
+      289    0.000    0.000    0.000    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/program.py:107(loop2_impl)
+       32    0.000    0.000    0.000    0.000 /mnt/c/Users/a073ffu/Downloads/卒論/Git/intseq/../intseq/src/sequence_generator.py:15(remember_letters)
+       32    0.000    0.000    0.000    0.000 {method 'items' of 'dict' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
