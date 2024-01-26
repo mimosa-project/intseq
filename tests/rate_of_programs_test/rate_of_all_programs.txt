@@ -1,0 +1,10 @@
+all samples: 100000
+y is not bound: 0.96765
+constant sequence: 0.02294
+trivial arithmetic progression: 0.0046
+the others: 0.00481
+
+samples y is bound.
+constant sequence: 0.7091190108191654
+trivial arithmetic progression: 0.14219474497681608
+the others: 0.14868624420401855

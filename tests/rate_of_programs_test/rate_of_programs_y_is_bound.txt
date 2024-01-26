@@ -1,0 +1,4 @@
+all samples: 100000
+constant sequence: 0.70302
+trivial arithmetic progression: 0.13482
+the others: 0.16216
