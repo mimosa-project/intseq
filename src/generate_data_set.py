@@ -7,7 +7,7 @@ import numpy as np
 import random
 import string
 
-# コードレビューここから（再）
+# コードレビューここから
 # 数列データ生成関数
 def generate_initial_sequence_sample(depth:int, numeric_sequence_length=20)->dict:
     # 数列生成プログラム1つ目作成
@@ -99,7 +99,7 @@ def generate_learning_data(depth:int = None, num_samples=10000):
     
     return data
 
-# コードレビューここまで（再）
+# コードレビューここまで
 
 '''
 data = generate_learning_data(3, 10)
