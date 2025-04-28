@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Callable, List, Tuple, Dict, Set, Union
 from collections import deque
 import program as program
-import token_sequence_converter
 import weight
 
 # トークンごとの引数の数を定義
@@ -30,7 +29,7 @@ TOKEN_ARG_COUNTS: Dict[str, int] = {
 
 # 数列変換操作を表す定数辞書
 # 値は変換時の必要な追加長さまたは特別な文字列を示す
-NUM_REDUCING_SEQUENCE_LENGTH: Dict[str, Union[int, str]] = {
+NUM_REDUCING_NUMERIC_SEQUENCE_LENGTH_AFTER_CALC: Dict[str, Union[int, str]] = {
     # 基本演算（値: 0）
     '0': 0,
     '1': 0,
@@ -74,10 +73,9 @@ NUM_REDUCING_SEQUENCE_LENGTH: Dict[str, Union[int, str]] = {
 }
 
 class Node:
-    def __init__(self, token, parent_node: Node = None):
-        self.parent_node = parent_node
-        self.child_nodes = []
+    def __init__(self, token, child_nodes:Node = None):
         self.token = token
+        self.child_nodes = child_nodes if child_nodes is not None else []
     
     def set_token(self, token: str):
         assert token in TOKEN_ARG_COUNTS.keys()
@@ -179,17 +177,17 @@ class ProgramGenerator:
         Raises:
             ValueError: トークン列が不正な場合
         """
-        program_stack = []
+        token_tree_stack = []
 
         for token in token_sequence:
-            program_stack = self._process_token(program_stack, token)
+            token_tree_stack = self._process_token(token_tree_stack, token)
 
-        if len(program_stack) != 1:
+        if len(token_tree_stack) != 1:
             raise ValueError("Invalid token sequence: Stack should contain exactly one node after processing")
 
-        self.root_node = program_stack[0]
+        self.root_node = token_tree_stack[0]
 
-    def _process_token(self, program_stack:list, token: str) -> None:
+    def _process_token(self, token_tree_stack:list, token: str) -> None:
         """個々のトークンを処理してスタックを更新
 
         Args:
@@ -199,17 +197,17 @@ class ProgramGenerator:
 
         if arg_count == 0:
             # 定数・変数の場合
-            program_stack.append(Node(token=token))
+            token_tree_stack.append(Node(token=token))
         else:
             # 演算子の場合、必要な数の引数を取り出してノードを作成
-            if len(program_stack) < arg_count:
+            if len(token_tree_stack) < arg_count:
                 raise ValueError(f"Not enough arguments for token {token}")
                 
-            child_nodes = [program_stack.pop() for _ in range(arg_count)]
+            child_nodes = [token_tree_stack.pop() for _ in range(arg_count)]
             child_nodes.reverse()  # 引数の順序を元に戻す
-            program_stack.append(Node(token=token, child_nodes=child_nodes))
+            token_tree_stack.append(Node(token=token, child_nodes=child_nodes))
         
-        return program_stack
+        return token_tree_stack
     
 
     
@@ -226,13 +224,13 @@ class ProgramGenerator:
         return self.root_node.check_is_x_bounded()
 
 def calculate_original_sequence_length(
-    tree_node: token_sequence_converter.TreeNode, 
+    tree_node: Node, 
     necessary_numeric_sequence_length: int
 ) -> int:
     """トークンツリーから、目標の数列長を得るために必要な入力数列の長さを計算する
 
     Args:
-        tree_node (TreeNode): トークン木の各ノード
+        tree_node (Node): トークン木の各ノード
         necessary_numeric_sequence_length (int): 必要とする数列の長さ
 
     Returns:
@@ -245,10 +243,10 @@ def calculate_original_sequence_length(
         - 2つの入力数列を使用する場合は、短い方の長さに合わせられる
     """
     # トークンに応じた長さの調整
-    if isinstance(NUM_REDUCING_SEQUENCE_LENGTH[tree_node.token], int):
+    if isinstance(NUM_REDUCING_NUMERIC_SEQUENCE_LENGTH_AFTER_CALC[tree_node.token], int):
         # 固定長減少の場合
-        adjusted_length = necessary_numeric_sequence_length + NUM_REDUCING_SEQUENCE_LENGTH[tree_node.token]
-    elif NUM_REDUCING_SEQUENCE_LENGTH[tree_node.token] == 'Hankel':
+        adjusted_length = necessary_numeric_sequence_length + NUM_REDUCING_NUMERIC_SEQUENCE_LENGTH_AFTER_CALC[tree_node.token]
+    elif NUM_REDUCING_NUMERIC_SEQUENCE_LENGTH_AFTER_CALC[tree_node.token] == 'Hankel':
         # Hankel変換の場合
         adjusted_length = necessary_numeric_sequence_length * 2
     else:

@@ -14,14 +14,14 @@ class Program:
         self.sub_programs = kwarg
 
 class Constant(Program):
-    def __init__(self, i, seq_length:int =20):
+    def __init__(self, i, numeric_sequence_length:int =20):
         super().__init__()
         assert(i in [0,1,2])
         self.i = i
-        self.seq_length = seq_length
+        self.numeric_sequence_length = numeric_sequence_length
 
     def calc(self, x: List[int]) -> List[int]:
-         return [self.i] * self.seq_length
+         return [self.i] * self.numeric_sequence_length
 
 
 class Variable(Program):
@@ -376,10 +376,10 @@ class Boustrophedon(Program):
 class ProgramStack:
     STR2RPN_LIST = ['0', '1', '2', 'x', 'plus', 'minus', 'multiply', 'division', 'mod', 'partial_sum', 'partial_sum_of_squares', 'self_convolution', 'linear_weighted_partial_sums', 'binomial', 'inverse_binomial_transform', 'product_of_two_consecutive_elements', 'cassini', 'first_stirling', 'second_stirling', 'first_differences', 'catalan', 'sum_of_divisors', 'moebius', 'hankel', 'boustrophedon']
 
-    def __init__(self, rpn, seq_length=20):
+    def __init__(self, rpn, numeric_sequence_length=20):
         self.rpn = rpn
         self.stack = []
-        self.seq_length = seq_length
+        self.numeric_sequence_length = numeric_sequence_length
     
     @staticmethod
     def str2rpn(str):
@@ -388,7 +388,7 @@ class ProgramStack:
     def build(self):
         for s in self.rpn:
             if isinstance(s, int) or s in ['0', '1', '2']:
-                self.stack.append(Constant(int(s), self.seq_length))
+                self.stack.append(Constant(int(s), self.numeric_sequence_length))
             elif s in ['x']:
                 self.stack.append(Variable(s))
             elif s == 'plus':
