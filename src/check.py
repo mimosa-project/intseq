@@ -1,4 +1,4 @@
-import program as program
+import program
 import generate_program
 import matplotlib.pyplot as plt
 
@@ -12,47 +12,47 @@ def check_sequence(token_sequence):
     }
 
     try:
-        program_stack = program.ProgramStack(token_sequence)
-        build_calc_program = program_stack.build()
-        if check_if_constant_sequence(build_calc_program):
+        program_inter = program.ProgramInterpreter(token_sequence)
+        program_executor = program_inter.build()
+        if check_if_constant_sequence(program_executor):
             counter_dict['constant_sequence'] += 1
-        elif check_if_trivial_arithmetic_progression(build_calc_program):
+        elif check_if_trivial_arithmetic_progression(program_executor):
             counter_dict['trivial_arithmetic_progression'] += 1
-        elif check_if_arithmetic_progression(build_calc_program):
+        elif check_if_arithmetic_progression(program_executor):
             counter_dict['arithmetic_progression'] += 1
         else:
             counter_dict['other_sequence'] += 1
     except program.SequenceError as e:
         counter_dict['sequence_error'] += 1
     except Exception as e:
-        print(build_calc_program[0].calc([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]))
+        print(program_executor[0].calc([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]))
         print(e)
     finally:
-        return counter_dict, build_calc_program
+        return counter_dict, program_executor
 
 # 定数数列かどうかチェック
-def check_if_constant_sequence(build_calc_program):
+def check_if_constant_sequence(program_executor):
     x = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    numeric_sequence = build_calc_program[0].calc(x)
+    numeric_sequence = program_executor[0].calc(x)
     for i in range(1, min(len(numeric_sequence),10)):
         if (numeric_sequence[0] != numeric_sequence[i]):
             return False
     return True
 
 # 初項0、公差1の等差数列(0,1,2,...)かどうかチェック
-def check_if_trivial_arithmetic_progression(build_calc_program):
+def check_if_trivial_arithmetic_progression(program_executor):
     
     x = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    numeric_sequence = build_calc_program[0].calc(x)
+    numeric_sequence = program_executor[0].calc(x)
     for i in range(0, min(len(numeric_sequence),10)):
         if(numeric_sequence[i] != i):
             return False
     return True
 
 # 等差数列かどうかチェック
-def check_if_arithmetic_progression(build_calc_program):
+def check_if_arithmetic_progression(program_executor):
     x = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    numeric_sequence = build_calc_program[0].calc(x)
+    numeric_sequence = program_executor[0].calc(x)
     a = []
     for i in range(1, min(len(numeric_sequence), 4)):
         a.append(numeric_sequence[i]-numeric_sequence[i-1])
@@ -75,12 +75,12 @@ def generate_sequneces(token_sequence_depth:int, sequnece_num:int):
             sequence_program = generate_program.ProgramGenerator(token_sequence_depth)
             sequence_program.build_tree()
 
-            counter_dict_, build_calc_program = check_sequence(sequence_program.get_token_sequence())
+            counter_dict_, program_executor = check_sequence(sequence_program.get_token_sequence())
             for k,v in counter_dict_.items():
                 assert k in counter_dict_
                 counter_dict[k] += v
             sequence_program_list.append(sequence_program)
-            calc_program_list.append(build_calc_program)
+            calc_program_list.append(program_executor)
             break
     
     return program_list, sequence_list, counter_dict

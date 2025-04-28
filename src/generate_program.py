@@ -105,7 +105,7 @@ class Node:
         return is_x_bounded
 
 
-# コードレビューここから
+# コードレビューここから(再)
 class ProgramGenerator:
     
     def __init__(self, max_depth:int):
@@ -263,4 +263,4 @@ def calculate_original_sequence_length(
         max_child_length = max(max_child_length, child_length)
     
     return max_child_length
-# コードレビューここまで
+# コードレビューここまで（再）

@@ -373,7 +373,8 @@ class Boustrophedon(Program):
 
         return seq
 
-class ProgramStack:
+class ProgramInterpreter:
+    # stackを用いて、文字列をツリー構造へ変更
     STR2RPN_LIST = ['0', '1', '2', 'x', 'plus', 'minus', 'multiply', 'division', 'mod', 'partial_sum', 'partial_sum_of_squares', 'self_convolution', 'linear_weighted_partial_sums', 'binomial', 'inverse_binomial_transform', 'product_of_two_consecutive_elements', 'cassini', 'first_stirling', 'second_stirling', 'first_differences', 'catalan', 'sum_of_divisors', 'moebius', 'hankel', 'boustrophedon']
 
     def __init__(self, rpn, numeric_sequence_length=20):
@@ -383,7 +384,7 @@ class ProgramStack:
     
     @staticmethod
     def str2rpn(str):
-        return [ProgramStack.STR2RPN_LIST[ord(c)-ord('A')] for c in str]
+        return [ProgramInterpreter.STR2RPN_LIST[ord(c)-ord('A')] for c in str]
 
     def build(self):
         for s in self.rpn:
@@ -474,7 +475,7 @@ def make_divisors(n):
     return lower_divisors + upper_divisors[::-1]
 '''
 x = [1]
-pr = ProgramStack(['B', 'Y'])
+pr = ProgramInterpreter(['B', 'Y'])
 stack = pr.build()
 print(stack[0].calc(x))
 '''
@@ -538,7 +539,7 @@ test_9 = [2,4,6,8]
 #[2,6,12,20]
 test_10 = [7,3,-2,4]
 #[7,10,8,12]
-test = ProgramStack(['D','J'])
+test = ProgramInterpreter(['D','J'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -573,7 +574,7 @@ test_9 = [0,1,0]
 #[0,0,1]
 test_10 = [1,2,1,2]
 #[1,4,6,8]
-test = ProgramStack(['D','L'])
+test = ProgramInterpreter(['D','L'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -609,7 +610,7 @@ test_9 = [1, -1, 1, -1, 1]
 #[0, -1, 1, -2, 2]
 test_10 = [2, 2, 2, 2]
 #[0, 2, 6, 12]
-test = ProgramStack(['D','M'])
+test = ProgramInterpreter(['D','M'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -644,7 +645,7 @@ test_9 = [0,1,2,3,4]
 #[0,1,4,12,32]
 test_10 = [1,1,1,1,1]
 #[1,2,4,8,16]
-test = ProgramStack(['D', 'N'])
+test = ProgramInterpreter(['D', 'N'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -683,7 +684,7 @@ test_9 = [0,1,2,3,4]
 #[0,-1,0,0,0]
 test_10 = [1,1,1,1,1]
 #[1,0,0,0,0]
-test = ProgramStack(['D', 'O'])
+test = ProgramInterpreter(['D', 'O'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -722,7 +723,7 @@ test_9 = [0,1,2,3,4]
 #[0,2,6,12]
 test_10 = [10,5,3,2,1]
 #[50,15,6,2]
-test = ProgramStack(['D', 'P'])
+test = ProgramInterpreter(['D', 'P'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -757,7 +758,7 @@ test_9 = [3,1,2,2,4]
 #[5,-2,4]
 test_10 = [10,5,3,2,1]
 #[5,1,-1]
-test = ProgramStack(['D', 'Q'])
+test = ProgramInterpreter(['D', 'Q'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -792,7 +793,7 @@ test_9 = [3,1,2,2,4]
 #[3,1,3,10,44]
 test_10 = [10,5,3,2,1]
 #[10,5,8,21,76]
-test = ProgramStack(['D', 'R'])
+test = ProgramInterpreter(['D', 'R'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -831,7 +832,7 @@ test_9 = [3,1,2,2,4]
 #[3,1,3,9,31]
 test_10 = [10,5,3,2,1]
 #[10,5,8,16,39]
-test = ProgramStack(['D', 'S'])
+test = ProgramInterpreter(['D', 'S'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -870,7 +871,7 @@ test_9 = [3,1,2,2,4]
 #[-2,1,0,2]
 test_10 = [10,5,3,2,1]
 #[-5,-2,-1,-1]
-test = ProgramStack(['D', 'T'])
+test = ProgramInterpreter(['D', 'T'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -905,7 +906,7 @@ test_9 = [3,1,2,2,4]
 #[3,1,3,8,25]
 test_10 = [10,5,3,2,1]
 #[10,5,8,18,47]
-test = ProgramStack(['D', 'U'])
+test = ProgramInterpreter(['D', 'U'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -944,7 +945,7 @@ test_9 = [0, 9, 18, 27, 36, 45, 54]
 #[0, 9, 27, 36, 63, 54, 108]
 test_10 = [1,1,1,1,1,1,1]
 #[0,1,2,2,3,2,4]
-test = ProgramStack(['D', 'V'])
+test = ProgramInterpreter(['D', 'V'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -979,7 +980,7 @@ test_9 = [3,1,2,2,4]
 #[0,1,1,1,2]
 test_10 = [10,5,3,2,1]
 #[0,5,-2,-3,-2]
-test = ProgramStack(['D', 'W'])
+test = ProgramInterpreter(['D', 'W'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -1020,7 +1021,7 @@ test_7 = [1,2,1,2]
 test_8 = [2,0,3,1]
 test_9 = [3,1,2,2,4]
 test_10 = [10,5,3,2,1]
-test = ProgramStack(['D', 'X'])
+test = ProgramInterpreter(['D', 'X'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
@@ -1055,7 +1056,7 @@ test_9 = [3,1,2,2,4]
 #[3,4,7,17,47]
 test_10 = [10,5,3,2,1]
 #[10,15,23,46,117]
-test = ProgramStack(['D', 'Y'])
+test = ProgramInterpreter(['D', 'Y'])
 stack = test.build()
 print(stack[0].calc(test_1))
 print(stack[0].calc(test_2))
