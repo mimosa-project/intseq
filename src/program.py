@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 from typing import Callable, List, Tuple, Dict, Set
 import math

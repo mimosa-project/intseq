@@ -6,6 +6,7 @@ from collections import deque
 import program as program
 import weight
 
+
 # トークンごとの引数の数を定義
 TOKEN_ARG_COUNTS: Dict[str, int] = {
     # 定数・変数（引数なし）
@@ -146,6 +147,7 @@ class ProgramGenerator:
                 node.append_child_node(child_node)
                 if not is_leaf:
                     self.build_tree(child_node, depth+1)
+            
     # トークン名の変換テーブル（アルファベット→トークン名）
     TOKEN_MAP = [
         '0', '1', '2', 'x', 'plus', 'minus', 'multiply', 

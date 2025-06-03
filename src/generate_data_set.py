@@ -37,10 +37,18 @@ def generate_initial_sequence_sample(depth:int, numeric_sequence_length=20)->dic
     }
 
 # 与えられた数列データに2つ目の数列データを追加する関数
-def generate_dependent_sequence_sample(data:dict, depth:int, numeric_sequence_length=20)->dict:
+def generate_dependent_sequence_sample(data:dict, depth:int, numeric_sequence_length=20, is_x_bounded = None)->dict:
     # 数列生成プログラム2つ目作成
-    program_gen_2 = generate_program.ProgramGenerator(depth)
-    program_gen_2.build_tree()
+    while True:
+        program_gen_2 = generate_program.ProgramGenerator(depth)
+        program_gen_2.build_tree()
+
+        if is_x_bounded == None:
+            break
+
+        elif is_x_bounded == program_gen_2.check_is_x_bounded():
+            break
+    
 
     # 2つ目の数列生成に必要な数列の長さを測定
 
@@ -73,29 +81,65 @@ def generate_dependent_sequence_sample(data:dict, depth:int, numeric_sequence_le
         {
             'numeric_sequence_2': seq_2[0:20],
             'token_sequence_2': program_gen_2.get_token_sequence(),
-            'information_amount_2': information_amount_2
+            'information_amount_2': information_amount_2,
+            'is_x_bounded': int(program_gen_2.check_is_x_bounded())
         }
     )
+
+    # 依存数列の順序変更
+    if random.random() < 0.5:
+        # スワップ
+        data = {
+            'numeric_sequence_1': data['numeric_sequence_2'],
+            'token_sequence_1': data['token_sequence_2'],
+            'information_amount_1': data['information_amount_2'],
+            'numeric_sequence_2': data['numeric_sequence_1'],
+            'token_sequence_2': data['token_sequence_1'],
+            'information_amount_2': data['information_amount_1']
+        }
+
+        data.update(
+            {
+            'was_swapped':1
+            }
+        )
+    else:
+        data.update(
+            {
+            'was_swapped':0
+            }
+        )
     
     return data
 
-
-def generate_learning_data(depth:int = None, num_samples=10000):
+# 同数の依存数列と非依存数列データの作成
+def generate_classification_data(depth:int = None, num_samples=10000):
     # 指定した深さの数列データを指定数作成
     if depth:
         data = [generate_initial_sequence_sample(depth) for _ in range(num_samples)]
 
+        count_dependent_sequence = 0
         for i in range(len(data)):
-            data[i] = generate_dependent_sequence_sample(data[i], depth)
+            if(count_dependent_sequence<num_samples/2 and i-count_dependent_sequence<num_samples/2):
+                data[i] = generate_dependent_sequence_sample(data[i], depth)
+                count_dependent_sequence += data[i]['is_x_bounded']
+            else:
+                data[i] = generate_dependent_sequence_sample(data[i], depth, is_x_bounded=(count_dependent_sequence<num_samples/2))
     # 指定がなければランダム作成
     else:
-        depth = random.randint(3, 15)
-        data = [generate_initial_sequence_sample(depth) for _ in range(num_samples)]
+        data = []
+        for _ in range(num_samples):
+            depth = random.randint(3, 15)
+            data.append(generate_initial_sequence_sample(depth))
 
-        depth = random.randint(3, 15)
+        count_dependent_sequence = 0
         for i in range(len(data)):
-            data[i] = generate_dependent_sequence_sample(data[i], depth)
-    
+            depth = random.randint(3, 15)
+            if(count_dependent_sequence<num_samples/2 and i-count_dependent_sequence<num_samples/2):
+                data[i] = generate_dependent_sequence_sample(data[i], depth)
+                count_dependent_sequence += data[i]['is_x_bounded']
+            else:
+                data[i] = generate_dependent_sequence_sample(data[i], depth, is_x_bounded=(count_dependent_sequence<num_samples/2))
     
     return data
 
