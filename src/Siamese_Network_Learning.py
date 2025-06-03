@@ -4,8 +4,8 @@ from tensorflow.keras import layers
 import numpy as np
 import program
 import generate_data_set
-from sklearn.model_selection import train_test_split # sklearnを使ってデータを分割
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score # 評価指標
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 
 # --- ハイパーパラメータの定義 ---
 MAX_SEQUENCE_LENGTH = 20  # 入力要素数20の数列
@@ -56,18 +56,35 @@ if __name__ == "__main__":
 
     # --- 訓練データとテストデータの生成と分割 ---
     num_total_samples = 10000 
-    # 全データを生成
-    raw_data = generate_data_set.generate_classification_data(num_samples=num_total_samples)
+    raw_data_list = generate_data_set.generate_classification_data(num_samples=num_total_samples)
 
-    # データ整形 (Numpy配列に変換し、必要な次元を追加)
-    X_A_raw = np.array([d for d in raw_data['numeric_sequence_1']]).reshape(num_total_samples, MAX_SEQUENCE_LENGTH, 1)
-    X_B_raw = np.array([d for d in raw_data['numeric_sequence_2']]).reshape(num_total_samples, MAX_SEQUENCE_LENGTH, 1)
-    y_raw = np.array(raw_data['is_x_bounded'])
+    # データをNumpy配列に変換し、スケーリングを行う
+    numeric_sequence_1_list = [d['numeric_sequence_1'] for d in raw_data_list]
+    numeric_sequence_2_list = [d['numeric_sequence_2'] for d in raw_data_list]
+    is_x_bounded_list = [d['is_x_bounded'] for d in raw_data_list]
 
-    # 訓練データとテストデータに分割 (例: 訓練80%, テスト20%)
-    # `stratify=y_raw` を指定することで、クラスの割合を訓練セットとテストセットで維持します
+    # 負の値にも対応する対数変換を適用する関数: sign(x) * log(1 + |x|)
+    def log_transform_with_sign(seq):
+        # NumPy配列に変換し、absとlog1p、signを効率的に適用
+        seq_np = np.array(seq, dtype=np.float64) # 計算精度を確保するためfloat64で一旦変換
+        transformed_seq = np.sign(seq_np) * np.log1p(np.abs(seq_np))
+        return transformed_seq.tolist() # リストに戻す
+
+    # スケーリングを適用してNumPy配列に変換
+    # 最終的なモデル入力はfloat32
+    X_A_scaled = np.array([log_transform_with_sign(seq) for seq in numeric_sequence_1_list], dtype=np.float32).reshape(num_total_samples, MAX_SEQUENCE_LENGTH, 1)
+    X_B_scaled = np.array([log_transform_with_sign(seq) for seq in numeric_sequence_2_list], dtype=np.float32).reshape(num_total_samples, MAX_SEQUENCE_LENGTH, 1)
+    y = np.array(is_x_bounded_list, dtype=np.int32)
+
+    # NaN（Not a Number）やinf（無限大）のチェック
+    if np.any(np.isnan(X_A_scaled)) or np.any(np.isinf(X_A_scaled)):
+        print("Warning: NaN or Inf values found in X_A_scaled after log transformation. Review your data or transformation.")
+    if np.any(np.isnan(X_B_scaled)) or np.any(np.isinf(X_B_scaled)):
+        print("Warning: NaN or Inf values found in X_B_scaled after log transformation. Review your data or transformation.")
+
+    # 訓練データとテストデータに分割
     X_train_A, X_test_A, X_train_B, X_test_B, y_train, y_test = train_test_split(
-        X_A_raw, X_B_raw, y_raw, test_size=0.2, random_state=42, stratify=y_raw
+        X_A_scaled, X_B_scaled, y, test_size=0.2, random_state=42, stratify=y
     )
     
     # 訓練データの形状を表示
