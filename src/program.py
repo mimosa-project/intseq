@@ -4,6 +4,7 @@ import math
 from sympy.functions.combinatorial.numbers import stirling, catalan
 from sympy.ntheory import mobius
 import numpy as np
+import sys # sys.float_info.max を使用するため
 
 class SequenceError(Exception):
     def __init__(self):
@@ -303,58 +304,42 @@ class Hankel(Program):
         seq_x_length = len(seq_x)
         seq = []
 
-        if seq_x_length < 1: # 少なくとも1要素は必要
+        if seq_x_length < 1:
             raise SequenceError()
 
-        # Hankel行列のサイズは、元の数列長によって変わる
-        # n番目のHankel行列は (n+1) x (n+1) のサイズを持ち、元の数列の 2n+1 要素を必要とする
-        # 出力したい数列の長さ (len(seq_x)) に応じて、Hankel行列を構成していく
-        
-        # 0番目のHankel行列 (1x1) は seq_x[0] のみ
         if seq_x_length >= 1:
             seq.append(seq_x[0])
 
-        # num は出力したい数列の要素のインデックス (1から開始)
-        # i番目の出力要素は、i x i のHankel行列の determinant
-        for num in range(1, math.ceil(seq_x_length / 2)): # 出力数列の長さを調整
-            # n番目のHankel行列は、元の数列の 2n 要素までを使用 (0-indexed)
-            # 例えば num=1 (2番目の出力要素) は 2x2 行列 (元の数列の0,1,2,3要素を使用)
-            # num=0 は 1x1 行列 (元の数列の0,1要素を使用)
-            
-            # Hankel行列を構築するために必要な元の数列の長さ
-            required_len_for_matrix = 2 * num + 1 
+        for num in range(1, math.ceil(seq_x_length / 2)):
+            required_len_for_matrix = 2 * num + 1
             if seq_x_length < required_len_for_matrix:
-                # 必要な長さが足りない場合は、そこで計算を打ち切るか、エラーにする
-                # ここでは計算を打ち切る
                 break
 
-            hankel_matrix_size = num + 1 # 行列のサイズは (num+1) x (num+1)
-            hankel = np.zeros((hankel_matrix_size, hankel_matrix_size), dtype=np.float64) # NumPy配列で初期化
+            hankel_matrix_size = num + 1
+            hankel = np.zeros((hankel_matrix_size, hankel_matrix_size), dtype=np.float64)
 
-            for i_matrix in range(hankel_matrix_size):
-                for j_matrix in range(hankel_matrix_size):
-                    # 元の数列のインデックスは i_matrix + j_matrix
-                    hankel[i_matrix, j_matrix] = seq_x[i_matrix + j_matrix]
-            
-            # NumPyのlinalg.detを使って行列式を計算
             try:
+                for i_matrix in range(hankel_matrix_size):
+                    for j_matrix in range(hankel_matrix_size):
+                        val = seq_x[i_matrix + j_matrix]
+                        # Pythonのintは任意精度だが、NumPyに渡すときにInfになる可能性があるためチェック
+                        if not (-sys.float_info.max <= val <= sys.float_info.max):
+                            raise OverflowError(f"Value {val} exceeds float64 limits.")
+                        hankel[i_matrix, j_matrix] = val
+
                 determinant_val = np.linalg.det(hankel)
-                # 結果が非常に小さい場合は0とみなす（浮動小数点誤差対策）
-                if abs(determinant_val) < 1e-9: # 適切な閾値に調整
+
+                # 結果がInfになる場合も検知
+                if np.isinf(determinant_val) or np.isnan(determinant_val):
+                    raise OverflowError(f"Determinant is Inf or NaN: {determinant_val}")
+
+                if abs(determinant_val) < 1e-9:
                     determinant_val = 0
-                seq.append(int(round(determinant_val))) # 整数に戻す（元のプログラムのint()の意図に合わせる）
-            except np.linalg.LinAlgError:
-                # 行列が特異（rank-deficient）であるなど、計算できない場合
-                print("Warning: Singular matrix encountered in Hankel determinant. Skipping or setting to 0.")
-                seq.append(0) # または NaN を追加するなど、適切なハンドリング
-            except OverflowError:
-                # 非常に大きな値になりすぎてNumPyでもオーバーフローする場合
-                print("Warning: Overflow in Hankel determinant calculation. Setting to 0.")
-                seq.append(0)
-            except Exception as e:
-                print(f"An unexpected error occurred during Hankel determinant: {e}. Setting to 0.")
-                seq.append(0)
-        
+                seq.append(int(round(determinant_val)))
+            except (np.linalg.LinAlgError, OverflowError, Exception) as e:
+                # 数値的な問題が発生した場合はSequenceErrorをraiseする
+                raise SequenceError(f"Hankel determinant calculation failed due to numerical instability or overflow: {e}")
+
         return seq
 
 class Boustrophedon(Program):
@@ -377,6 +362,51 @@ class Boustrophedon(Program):
             seq.append(T[i][i])
 
         return seq
+
+def check_if_constant_sequence(seq: List[Union[int, float]]) -> bool:
+    """
+    与えられた数列が定数列であるかどうかをチェックします。
+    すべての要素が同じであればTrueを返します。
+    """
+    if not seq: # 空の数列は定数列とみなさない
+        return False
+    
+    first_element = seq[0]
+    for element in seq[1:]:
+        # 浮動小数点誤差を考慮する場合
+        if isinstance(element, float) or isinstance(first_element, float):
+            if abs(element - first_element) > 1e-9: # 小さい閾値を設ける
+                return False
+        else: # 整数値の場合
+            if element != first_element:
+                return False
+    return True
+
+def check_if_arithmetic_progression(seq: List[Union[int, float]]) -> bool:
+    """
+    与えられた数列が等差数列であるかどうかをチェックします。
+    定数列も等差数列とみなされます。
+    """
+    if len(seq) < 2: # 1要素以下の数列は等差数列とみなさない（定義上はそうかもしれないが、実用上は除外しない）
+        return False
+
+    # 最初の公差を計算
+    if isinstance(seq[1], float) or isinstance(seq[0], float):
+        # 浮動小数点の場合
+        diff = seq[1] - seq[0]
+        # 定数列も等差数列に含まれるため、定数列チェック関数を呼び出す必要はない
+        # ただし、浮動小数点誤差があるので注意
+        for i in range(2, len(seq)):
+            if abs((seq[i] - seq[i-1]) - diff) > 1e-9: # 小さい閾値を設ける
+                return False
+    else:
+        # 整数値の場合
+        diff = seq[1] - seq[0]
+        for i in range(2, len(seq)):
+            if (seq[i] - seq[i-1]) != diff:
+                return False
+    
+    return True
 
 class ProgramInterpreter:
     # stackを用いて、文字列をツリー構造へ変更

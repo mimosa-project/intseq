@@ -55,7 +55,7 @@ if __name__ == "__main__":
     siamese_dep_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
     # --- 訓練データとテストデータの生成と分割 ---
-    num_total_samples = 100 
+    num_total_samples = 10000 
 
     print(f"Generating {num_total_samples} samples for profiling...")
 
