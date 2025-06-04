@@ -301,56 +301,61 @@ class Hankel(Program):
     def calc(self, x: List[int]) -> List[int]:
         seq_x = self.sub_programs['a'].calc(x)
         seq_x_length = len(seq_x)
-        seq =[seq_x[0]]
+        seq = []
 
-        for num in range(1, math.ceil(seq_x_length/2)):
-            hankel = []
-            for i in range(num+1):
-                hankel.append([])
-                for j in range(num+1):
-                    hankel[i].append(seq_x[i + j])
-            seq.append(self.det(hankel))
+        if seq_x_length < 1: # 少なくとも1要素は必要
+            raise SequenceError()
+
+        # Hankel行列のサイズは、元の数列長によって変わる
+        # n番目のHankel行列は (n+1) x (n+1) のサイズを持ち、元の数列の 2n+1 要素を必要とする
+        # 出力したい数列の長さ (len(seq_x)) に応じて、Hankel行列を構成していく
+        
+        # 0番目のHankel行列 (1x1) は seq_x[0] のみ
+        if seq_x_length >= 1:
+            seq.append(seq_x[0])
+
+        # num は出力したい数列の要素のインデックス (1から開始)
+        # i番目の出力要素は、i x i のHankel行列の determinant
+        for num in range(1, math.ceil(seq_x_length / 2)): # 出力数列の長さを調整
+            # n番目のHankel行列は、元の数列の 2n 要素までを使用 (0-indexed)
+            # 例えば num=1 (2番目の出力要素) は 2x2 行列 (元の数列の0,1,2,3要素を使用)
+            # num=0 は 1x1 行列 (元の数列の0,1要素を使用)
+            
+            # Hankel行列を構築するために必要な元の数列の長さ
+            required_len_for_matrix = 2 * num + 1 
+            if seq_x_length < required_len_for_matrix:
+                # 必要な長さが足りない場合は、そこで計算を打ち切るか、エラーにする
+                # ここでは計算を打ち切る
+                break
+
+            hankel_matrix_size = num + 1 # 行列のサイズは (num+1) x (num+1)
+            hankel = np.zeros((hankel_matrix_size, hankel_matrix_size), dtype=np.float64) # NumPy配列で初期化
+
+            for i_matrix in range(hankel_matrix_size):
+                for j_matrix in range(hankel_matrix_size):
+                    # 元の数列のインデックスは i_matrix + j_matrix
+                    hankel[i_matrix, j_matrix] = seq_x[i_matrix + j_matrix]
+            
+            # NumPyのlinalg.detを使って行列式を計算
+            try:
+                determinant_val = np.linalg.det(hankel)
+                # 結果が非常に小さい場合は0とみなす（浮動小数点誤差対策）
+                if abs(determinant_val) < 1e-9: # 適切な閾値に調整
+                    determinant_val = 0
+                seq.append(int(round(determinant_val))) # 整数に戻す（元のプログラムのint()の意図に合わせる）
+            except np.linalg.LinAlgError:
+                # 行列が特異（rank-deficient）であるなど、計算できない場合
+                print("Warning: Singular matrix encountered in Hankel determinant. Skipping or setting to 0.")
+                seq.append(0) # または NaN を追加するなど、適切なハンドリング
+            except OverflowError:
+                # 非常に大きな値になりすぎてNumPyでもオーバーフローする場合
+                print("Warning: Overflow in Hankel determinant calculation. Setting to 0.")
+                seq.append(0)
+            except Exception as e:
+                print(f"An unexpected error occurred during Hankel determinant: {e}. Setting to 0.")
+                seq.append(0)
         
         return seq
-    '''   
-    # https://stackoverflow.com/questions/66192894/precise-determinant-of-integer-nxn-matrix 参考
-    def det(self, M):
-        M = np.array(M, dtype=int) # make a copy to keep original M unmodified
-        N, sign, prev = len(M), 1, 1
-        for i in range(N-1):
-            if M[i, i] == 0: # swap with another row having nonzero i's elem
-                swapto = next( (j for j in range(i+1,N) if M[j, i] != 0), None )
-                if swapto is None:
-                    return 0 # all M[*][i] are zero => zero determinant
-                M[[i, swapto]] = M[[swapto, i]]  # Swap rows
-                sign = -sign
-            for j in range(i+1,N):
-                for k in range(i+1,N):
-                    assert ( M[j, k] * M[i, i] - M[j, i] * M[i, k] ) % prev == 0
-                    M[j, k] = ( M[j, k] * M[i, i] - M[j, i] * M[i, k] ) // prev
-            prev = M[i, i]
-        return sign * M[-1, -1]
-    '''
-    def det(self, M):
-        N = len(M)
-        sign = 1
-        
-        # 深いコピーを作成して元のMを変更しないようにする
-        M = [row[:] for row in M]
-        prev = 1  # 最初の分母として使用される値を初期化
-        for i in range(N-1):
-            if M[i][i] == 0: # swap with another row having nonzero i's elem
-                swapto = next( (j for j in range(i+1,N) if M[j][i] != 0), None )
-                if swapto is None:
-                    return 0 # all M[*][i] are zero => zero determinant
-                M[i], M[swapto] = M[swapto], M[i]  # Swap rows
-                sign = -sign
-            for j in range(i+1,N):
-                for k in range(i+1,N):
-                    #assert ( M[j, k] * M[i, i] - M[j, i] * M[i, k] ) % prev == 0
-                    M[j][k] = ( M[j][k] * M[i][i] - M[j][i] * M[i][k] ) // prev
-            prev = M[i][i]
-        return sign * M[-1][-1]
 
 class Boustrophedon(Program):
     def calc(self, x: List[int]) -> List[int]:
