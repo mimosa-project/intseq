@@ -7,6 +7,9 @@ import generate_data_set
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 
+import cProfile # cProfileをインポート
+import pstats   # pstatsをインポート（結果をファイルに保存するため）
+
 # --- ハイパーパラメータの定義 ---
 MAX_SEQUENCE_LENGTH = 20  # 入力要素数20の数列
 EMBEDDING_DIM = 64         # 埋め込みベクトルの次元数
@@ -48,46 +51,53 @@ if __name__ == "__main__":
     input_shape = (MAX_SEQUENCE_LENGTH, 1)
     siamese_dep_model, encoder_dep = create_siamese_network_for_dependency(input_shape)
 
-    # モデルの概要を表示
     siamese_dep_model.summary()
-
-    # モデルのコンパイル
     siamese_dep_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
     # --- 訓練データとテストデータの生成と分割 ---
-    num_total_samples = 10000 
+    num_total_samples = 100 
+
+    print(f"Generating {num_total_samples} samples for profiling...")
+
+    # プロファイリングを開始
+    profiler = cProfile.Profile()
+    profiler.enable()
+
     raw_data_list = generate_data_set.generate_classification_data(num_samples=num_total_samples)
+
+    profiler.disable() # プロファイリングを終了
+
+    # プロファイリング結果をファイルに保存
+    stats = pstats.Stats(profiler)
+    stats.sort_stats('cumulative') # 累積時間でソート
+    stats.dump_stats('data_generation_profile.prof') # 結果をファイルに保存
+
+    print("Data generation profiling finished. Results saved to data_generation_profile.prof")
+
 
     # データをNumpy配列に変換し、スケーリングを行う
     numeric_sequence_1_list = [d['numeric_sequence_1'] for d in raw_data_list]
     numeric_sequence_2_list = [d['numeric_sequence_2'] for d in raw_data_list]
     is_x_bounded_list = [d['is_x_bounded'] for d in raw_data_list]
 
-    # 負の値にも対応する対数変換を適用する関数: sign(x) * log(1 + |x|)
     def log_transform_with_sign(seq):
-        # NumPy配列に変換し、absとlog1p、signを効率的に適用
-        seq_np = np.array(seq, dtype=np.float64) # 計算精度を確保するためfloat64で一旦変換
+        seq_np = np.array(seq, dtype=np.float64)
         transformed_seq = np.sign(seq_np) * np.log1p(np.abs(seq_np))
-        return transformed_seq.tolist() # リストに戻す
+        return transformed_seq.tolist()
 
-    # スケーリングを適用してNumPy配列に変換
-    # 最終的なモデル入力はfloat32
     X_A_scaled = np.array([log_transform_with_sign(seq) for seq in numeric_sequence_1_list], dtype=np.float32).reshape(num_total_samples, MAX_SEQUENCE_LENGTH, 1)
     X_B_scaled = np.array([log_transform_with_sign(seq) for seq in numeric_sequence_2_list], dtype=np.float32).reshape(num_total_samples, MAX_SEQUENCE_LENGTH, 1)
     y = np.array(is_x_bounded_list, dtype=np.int32)
 
-    # NaN（Not a Number）やinf（無限大）のチェック
     if np.any(np.isnan(X_A_scaled)) or np.any(np.isinf(X_A_scaled)):
         print("Warning: NaN or Inf values found in X_A_scaled after log transformation. Review your data or transformation.")
     if np.any(np.isnan(X_B_scaled)) or np.any(np.isinf(X_B_scaled)):
         print("Warning: NaN or Inf values found in X_B_scaled after log transformation. Review your data or transformation.")
 
-    # 訓練データとテストデータに分割
     X_train_A, X_test_A, X_train_B, X_test_B, y_train, y_test = train_test_split(
         X_A_scaled, X_B_scaled, y, test_size=0.2, random_state=42, stratify=y
     )
     
-    # 訓練データの形状を表示
     print("\nTraining and Test data shapes:")
     print(f"X_train_A shape: {X_train_A.shape}")
     print(f"X_train_B shape: {X_train_B.shape}")
@@ -105,7 +115,7 @@ if __name__ == "__main__":
         y_train,
         epochs=epochs,
         batch_size=batch_size,
-        validation_split=0.2 # 訓練データの一部を検証データとして使用
+        validation_split=0.2
     )
     print("Training finished.")
 
@@ -115,9 +125,8 @@ if __name__ == "__main__":
     print(f"Test Loss: {loss:.4f}")
     print(f"Test Accuracy: {accuracy:.4f}")
 
-    # その他の評価指標
     y_pred_prob = siamese_dep_model.predict([X_test_A, X_test_B])
-    y_pred = (y_pred_prob > 0.5).astype(int) # 閾値0.5で二値化
+    y_pred = (y_pred_prob > 0.5).astype(int)
 
     precision = precision_score(y_test, y_pred)
     recall = recall_score(y_test, y_pred)
@@ -129,6 +138,5 @@ if __name__ == "__main__":
     print(f"Test F1-score: {f1:.4f}")
     print(f"Test AUC-ROC: {auc_roc:.4f}")
 
-    # --- (オプション) モデルの保存 ---
     # siamese_dep_model.save("siamese_dependency_model.h5")
     # encoder_dep.save("dependency_encoder.h5")
