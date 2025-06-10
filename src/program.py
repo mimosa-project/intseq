@@ -1,10 +1,10 @@
-
 from __future__ import annotations
 from typing import Callable, List, Tuple, Dict, Set
 import math
 from sympy.functions.combinatorial.numbers import stirling, catalan
 from sympy.ntheory import mobius
 import numpy as np
+import sys # sys.float_info.max を使用するため
 
 class SequenceError(Exception):
     def __init__(self):
@@ -302,56 +302,45 @@ class Hankel(Program):
     def calc(self, x: List[int]) -> List[int]:
         seq_x = self.sub_programs['a'].calc(x)
         seq_x_length = len(seq_x)
-        seq =[seq_x[0]]
+        seq = []
 
-        for num in range(1, math.ceil(seq_x_length/2)):
-            hankel = []
-            for i in range(num+1):
-                hankel.append([])
-                for j in range(num+1):
-                    hankel[i].append(seq_x[i + j])
-            seq.append(self.det(hankel))
-        
+        if seq_x_length < 1:
+            raise SequenceError()
+
+        if seq_x_length >= 1:
+            seq.append(seq_x[0])
+
+        for num in range(1, math.ceil(seq_x_length / 2)):
+            required_len_for_matrix = 2 * num + 1
+            if seq_x_length < required_len_for_matrix:
+                break
+
+            hankel_matrix_size = num + 1
+            hankel = np.zeros((hankel_matrix_size, hankel_matrix_size), dtype=np.float64)
+
+            try:
+                for i_matrix in range(hankel_matrix_size):
+                    for j_matrix in range(hankel_matrix_size):
+                        val = seq_x[i_matrix + j_matrix]
+                        # Pythonのintは任意精度だが、NumPyに渡すときにInfになる可能性があるためチェック
+                        if not (-sys.float_info.max <= val <= sys.float_info.max):
+                            raise OverflowError(f"Value {val} exceeds float64 limits.")
+                        hankel[i_matrix, j_matrix] = val
+
+                determinant_val = np.linalg.det(hankel)
+
+                # 結果がInfになる場合も検知
+                if np.isinf(determinant_val) or np.isnan(determinant_val):
+                    raise OverflowError(f"Determinant is Inf or NaN: {determinant_val}")
+
+                if abs(determinant_val) < 1e-9:
+                    determinant_val = 0
+                seq.append(int(round(determinant_val)))
+            except (np.linalg.LinAlgError, OverflowError, Exception) as e:
+                # 数値的な問題が発生した場合はSequenceErrorをraiseする
+                raise SequenceError(f"Hankel determinant calculation failed due to numerical instability or overflow: {e}")
+
         return seq
-    '''   
-    # https://stackoverflow.com/questions/66192894/precise-determinant-of-integer-nxn-matrix 参考
-    def det(self, M):
-        M = np.array(M, dtype=int) # make a copy to keep original M unmodified
-        N, sign, prev = len(M), 1, 1
-        for i in range(N-1):
-            if M[i, i] == 0: # swap with another row having nonzero i's elem
-                swapto = next( (j for j in range(i+1,N) if M[j, i] != 0), None )
-                if swapto is None:
-                    return 0 # all M[*][i] are zero => zero determinant
-                M[[i, swapto]] = M[[swapto, i]]  # Swap rows
-                sign = -sign
-            for j in range(i+1,N):
-                for k in range(i+1,N):
-                    assert ( M[j, k] * M[i, i] - M[j, i] * M[i, k] ) % prev == 0
-                    M[j, k] = ( M[j, k] * M[i, i] - M[j, i] * M[i, k] ) // prev
-            prev = M[i, i]
-        return sign * M[-1, -1]
-    '''
-    def det(self, M):
-        N = len(M)
-        sign = 1
-        
-        # 深いコピーを作成して元のMを変更しないようにする
-        M = [row[:] for row in M]
-        prev = 1  # 最初の分母として使用される値を初期化
-        for i in range(N-1):
-            if M[i][i] == 0: # swap with another row having nonzero i's elem
-                swapto = next( (j for j in range(i+1,N) if M[j][i] != 0), None )
-                if swapto is None:
-                    return 0 # all M[*][i] are zero => zero determinant
-                M[i], M[swapto] = M[swapto], M[i]  # Swap rows
-                sign = -sign
-            for j in range(i+1,N):
-                for k in range(i+1,N):
-                    #assert ( M[j, k] * M[i, i] - M[j, i] * M[i, k] ) % prev == 0
-                    M[j][k] = ( M[j][k] * M[i][i] - M[j][i] * M[i][k] ) // prev
-            prev = M[i][i]
-        return sign * M[-1][-1]
 
 class Boustrophedon(Program):
     def calc(self, x: List[int]) -> List[int]:
@@ -373,6 +362,51 @@ class Boustrophedon(Program):
             seq.append(T[i][i])
 
         return seq
+
+def check_if_constant_sequence(seq: List[Union[int, float]]) -> bool:
+    """
+    与えられた数列が定数列であるかどうかをチェックします。
+    すべての要素が同じであればTrueを返します。
+    """
+    if not seq: # 空の数列は定数列とみなさない
+        return False
+    
+    first_element = seq[0]
+    for element in seq[1:]:
+        # 浮動小数点誤差を考慮する場合
+        if isinstance(element, float) or isinstance(first_element, float):
+            if abs(element - first_element) > 1e-9: # 小さい閾値を設ける
+                return False
+        else: # 整数値の場合
+            if element != first_element:
+                return False
+    return True
+
+def check_if_arithmetic_progression(seq: List[Union[int, float]]) -> bool:
+    """
+    与えられた数列が等差数列であるかどうかをチェックします。
+    定数列も等差数列とみなされます。
+    """
+    if len(seq) < 2: # 1要素以下の数列は等差数列とみなさない（定義上はそうかもしれないが、実用上は除外しない）
+        return False
+
+    # 最初の公差を計算
+    if isinstance(seq[1], float) or isinstance(seq[0], float):
+        # 浮動小数点の場合
+        diff = seq[1] - seq[0]
+        # 定数列も等差数列に含まれるため、定数列チェック関数を呼び出す必要はない
+        # ただし、浮動小数点誤差があるので注意
+        for i in range(2, len(seq)):
+            if abs((seq[i] - seq[i-1]) - diff) > 1e-9: # 小さい閾値を設ける
+                return False
+    else:
+        # 整数値の場合
+        diff = seq[1] - seq[0]
+        for i in range(2, len(seq)):
+            if (seq[i] - seq[i-1]) != diff:
+                return False
+    
+    return True
 
 class ProgramInterpreter:
     # stackを用いて、文字列をツリー構造へ変更

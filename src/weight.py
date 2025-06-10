@@ -23,8 +23,8 @@ class Token_weights:
         self.tokens = list(self.token_weights.keys())
         self.weights = list(self.token_weights.values())
         self.weight_sum = sum(self.weights)
-        self.leaf_tokens = [k for k,v in TOKEN_ARG_COUNTS.items() if v == 0]
-        self.leaf_weights = [v for k,v in self.token_weights.items() if k in self.get_leaf_tokens()]
+        self.leaf_tokens = [k for k in self.token_weights if TOKEN_ARG_COUNTS[k] == 0 and self.token_weights[k] > 0]
+        self.leaf_weights = [self.token_weights[k] for k in self.get_leaf_tokens()]
         self.leaf_weight_sum = sum(self.get_leaf_weights())
     
     def get_Token_weights(self):
