@@ -23,7 +23,7 @@ BATCH_SIZE = 32
 TRAIN_TEST_SPLIT_RATIO = 0.8 
 
 # --- 分析に使用するサンプル数 ---
-MAX_SAMPLES_FOR_TRAINING_AND_EVALUATION = 100000 
+MAX_SAMPLES_FOR_TRAINING_AND_EVALUATION = 300000 
 
 
 # ★ 編集距離回帰に適した距離指標を計算するカスタムレイヤー ★
@@ -63,17 +63,6 @@ class EditDistanceFriendlyFeatures(layers.Layer):
         
         return distance_features
 
-# ★ より編集距離に近い形の活性化関数を持つカスタムレイヤー ★
-class EditDistanceActivation(layers.Layer):
-    def __init__(self, **kwargs):
-        super(EditDistanceActivation, self).__init__(**kwargs)
-    
-    def call(self, inputs):
-        # ReLUベースだが、編集距離らしい非線形性を持たせる
-        # 小さい値では線形に近く、大きい値では増加率が鈍化
-        # tf.nn.relu(inputs) + 1e-7 は、入力が負にならないようにし、平方根計算の安定性を確保します。
-        return tf.sqrt(tf.nn.relu(inputs) + 1e-7)  # 平方根で非線形性を調整
-
 # ★ 編集距離予測に最適化されたエンコーダー ★
 def create_encoder_for_edit_distance(input_shape, embedding_dim=64):
     """編集距離予測に最適化されたエンコーダー"""
@@ -98,112 +87,6 @@ def create_encoder_for_edit_distance(input_shape, embedding_dim=64):
     x = tf.nn.l2_normalize(x, axis=-1)
         
     return keras.Model(inputs=input_seq, outputs=x, name="edit_distance_encoder")
-
-# ★ 編集距離回帰に特化したSiameseネットワーク ★
-def create_edit_distance_siamese_network(input_shape, embedding_dim=64, max_edit_distance=None):
-    """編集距離回帰に特化したSiameseネットワーク"""
-    encoder = create_encoder_for_edit_distance(input_shape, embedding_dim)
-    input_A = keras.Input(shape=input_shape, name="input_A")
-    input_B = keras.Input(shape=input_shape, name="input_B")
-    embedding_A = encoder(input_A)
-    embedding_B = encoder(input_B)
-    
-    # 編集距離に適した距離特徴量を計算
-    distance_features = EditDistanceFriendlyFeatures()([embedding_A, embedding_B])
-        
-    # 距離特徴量を編集距離に変換
-    x = layers.Dense(8, activation='relu')(distance_features)
-
-    # バッチ正規化
-    x = layers.BatchNormalization()(x)
-
-    x = EditDistanceActivation()(x) # カスタム活性化関数
-        
-    # 最終的な編集距離予測
-    output_layer = layers.Dense(1, activation='relu', name='predicted_edit_distance')(x)
-        
-    # 最大編集距離でクリッピング（オプション）
-    if max_edit_distance is not None:
-        output_layer = tf.clip_by_value(output_layer, 0.0, max_edit_distance)
-    
-    siamese_model = keras.Model(inputs=[input_A, input_B], outputs=output_layer, 
-                               name="edit_distance_siamese_model")
-        
-    return siamese_model, encoder
-
-# ★ 最もシンプルな編集距離近似（ユークリッド距離のみ） ★
-def create_simple_euclidean_siamese_network(input_shape, embedding_dim=64):
-    """最もシンプルな編集距離近似（ユークリッド距離のみ）"""
-    encoder = create_encoder_for_edit_distance(input_shape, embedding_dim)
-    input_A = keras.Input(shape=input_shape, name="input_A")
-    input_B = keras.Input(shape=input_shape, name="input_B")
-    embedding_A = encoder(input_A)
-    embedding_B = encoder(input_B)
-    
-    # ユークリッド距離を直接計算
-    euclidean_dist = tf.sqrt(tf.reduce_sum(tf.square(embedding_A - embedding_B), axis=-1, keepdims=True))
-        
-    # 学習可能なスケーリング
-    output_layer = layers.Dense(1, activation='relu', use_bias=True, 
-                               name='predicted_edit_distance')(euclidean_dist)
-    
-    # バッチ正規化
-    output_layer = layers.BatchNormalization()(output_layer)
-    
-    siamese_model = keras.Model(inputs=[input_A, input_B], outputs=output_layer, 
-                               name="euclidean_siamese_model")
-        
-    return siamese_model, encoder
-
-# ★ Contrastive Lossを使用した編集距離学習（ただし、回帰タスクには要調整） ★
-def create_contrastive_loss_siamese_network(input_shape, embedding_dim=64, margin=2.0):
-    """Contrastive Lossを使用した編集距離学習"""
-    # このモデルはユークリッド距離を出力し、Contrastive Lossで学習することを想定
-    # 回帰タスクの損失関数 (MSE/MAE) を適用するには、この出力がそのまま編集距離になるよう調整が必要
-    encoder = create_encoder_for_edit_distance(input_shape, embedding_dim)
-    input_A = keras.Input(shape=input_shape, name="input_A")
-    input_B = keras.Input(shape=input_shape, name="input_B")
-    embedding_A = encoder(input_A)
-    embedding_B = encoder(input_B)
-    
-    # ユークリッド距離
-    euclidean_dist = tf.sqrt(tf.reduce_sum(tf.square(embedding_A - embedding_B), axis=-1, keepdims=True))
-    
-    siamese_model = keras.Model(inputs=[input_A, input_B], outputs=euclidean_dist, 
-                               name="contrastive_siamese_model")
-        
-    return siamese_model, encoder
-
-# ★ カスタム損失関数：編集距離に最適化 ★
-def edit_distance_loss(y_true, y_pred):
-    """編集距離予測に最適化された損失関数"""
-    # 基本のMSE
-    mse_loss = tf.reduce_mean(tf.square(y_true - y_pred))
-        
-    # 小さい編集距離での精度を重視する重み
-    # y_trueが0の場合にinfにならないよう、y_true + 1.0
-    weights = 1.0 / (y_true + 1.0)  
-    weighted_mse = tf.reduce_mean(weights * tf.square(y_true - y_pred))
-        
-    return 0.7 * mse_loss + 0.3 * weighted_mse # 重み付けの割合は調整可能
-
-# ★ 編集距離回帰に推奨されるモデル構成を選択・コンパイルするヘルパー関数 ★
-def get_recommended_model_for_edit_distance(input_shape, embedding_dim=64, max_edit_distance=None):
-    """編集距離回帰に推奨されるモデル構成"""
-        
-    # ここで試したいモデルを選択します。
-    # model, encoder = create_simple_euclidean_siamese_network(input_shape, embedding_dim) # 1. 最もシンプル
-    model, encoder = create_edit_distance_siamese_network(input_shape, embedding_dim, max_edit_distance) # 2. より高機能な版 (推奨)
-    # model, encoder = create_contrastive_loss_siamese_network(input_shape, embedding_dim, max_edit_distance) # 3. Contrastive Loss用 (損失関数もContrastiveLossにする必要あり)
-        
-    # 編集距離に最適化された損失関数とメトリクス
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), 
-        loss=edit_distance_loss,  # ★ カスタム損失関数を適用 ★
-        metrics=['mae', 'mse']    # MAEとMSEを評価指標に
-    )
-        
-    return model, encoder
 
 # 対数変換を適用する関数
 def log_transform_with_sign(seq):
@@ -241,7 +124,7 @@ def create_comparison_classifier_model(input_shape, embedding_dim=EMBEDDING_DIM)
 
     # 選択肢3: 結合 + 差の絶対値 (最も推奨)
     diff_features = tf.abs(features_AB - features_AC)
-    comparison_features = layers.concatenate([features_AB, features_AC, diff_features], axis=-1) # ★ ここを修正 ★
+    comparison_features = layers.concatenate([features_AB, features_AC, diff_features], axis=-1) 
 
     # 選択肢4: 結合 + 比率 (ゼロ除算注意)
     # ratio_features = tf.math.divide_no_nan(features_AB, features_AC)
@@ -279,7 +162,7 @@ if __name__ == "__main__":
     
     # ★ 1. ロードするデータセットファイルの指定 ★
     DATASET_FILES = [
-        "comparison_datasets/comparison_data_depth_1-10.pkl", # generate_comparison_datasets.py で生成したファイル名に合わせる
+        "comparison_datasets/comparison_data.pkl", # generate_comparison_datasets.py で生成したファイル名に合わせる
         # 例: 複数の深さの比較データを結合する場合
         # "comparison_datasets/comparison_data_depth_1-10.pkl",
         # "comparison_datasets/comparison_data_depth_11-15.pkl",
