@@ -19,12 +19,26 @@ import weight
 # --- ハイパーパラメータの定義 ---
 MAX_SEQUENCE_LENGTH = 20
 EMBEDDING_DIM = 64
+N_BINS = 20
 EPOCHS = 10
 BATCH_SIZE = 32
 TRAIN_TEST_SPLIT_RATIO = 0.8 
 
 # --- 分析に使用するサンプル数 ---
-MAX_SAMPLES_FOR_TRAINING_AND_EVALUATION = 300000 
+MAX_SAMPLES_FOR_TRAINING_AND_EVALUATION = 100000 
+
+
+# --- 分位ビン化用関数 ---
+def compute_bin_edges(all_sequences, n_bins=20):
+    # 全数列を1Dに平坦化し，ビン範囲を決定
+    # 出力は境界点のリスト n_bins+1
+    all_values = np.concatenate(all_sequences)
+    edges = np.quantile(all_values, np.linspace(0, 1, n_bins+1))
+    return edges
+
+def sequence_to_bins(seq, edges):
+    bins = np.searchsorted(edges, seq, side='right') - 1
+    return np.clip(bins, 0, len(edges)-2)  # IDは0〜n_bins-1
 
 
 # ★ 編集距離回帰に適した距離指標を計算するカスタムレイヤー ★
@@ -64,30 +78,55 @@ class EditDistanceFriendlyFeatures(layers.Layer):
         
         return distance_features
 
-# ★ 編集距離予測に最適化されたエンコーダー ★
-def create_encoder_for_edit_distance(input_shape, embedding_dim=64):
-    """編集距離予測に最適化されたエンコーダー"""
-    input_seq = keras.Input(shape=input_shape, name="input_sequence")
-        
+def create_encoder_for_edit_distance_with_bins(raw_input_shape, bins_input_shape, n_bins, embedding_dim=64):
+    """分位ビニングを追加したエンコーダー"""
+
+    # --元のfloat入力部分--    
+    input_raw = keras.Input(shape=raw_input_shape, name="raw_sequence")
+
     # 位置情報を重視するためのConv1D
-    x = layers.Conv1D(filters=32, kernel_size=3, activation='relu', padding='same')(input_seq)
-    x = layers.MaxPooling1D(pool_size=2)(x)
-    x = layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same')(x)
-    x = layers.MaxPooling1D(pool_size=2)(x)
+    x_raw = layers.Conv1D(filters=32, kernel_size=3, activation='relu', padding='same')(input_raw)
+    x_raw = layers.Dropout(0.5)(x_raw)
+    x_raw = layers.MaxPooling1D(pool_size=2)(x_raw)
+    x_raw = layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same')(x_raw)
+    x_raw = layers.Dropout(0.5)(x_raw)
+    x_raw = layers.MaxPooling1D(pool_size=2)(x_raw)
         
     # 順序情報を保持するLSTM
-    x = layers.LSTM(64, return_sequences=False)(x)
-        
-    # 編集距離計算に有効な特徴量を抽出
+    x_raw = layers.LSTM(64, return_sequences=False)(x_raw)
+    x_raw = layers.Dropout(0.5)(x_raw)
+          
+
+    # --ビン入力部分--
+    # 生データを同じ時系列データのため，同じ処理を通す
+    input_bins = keras.Input(shape=bins_input_shape, dtype='int32')
+    x_bins = layers.Embedding(input_dim=n_bins+1, output_dim=16)(input_bins)
+    x_bins = layers.Conv1D(32, 3, activation='relu', padding='same')(x_bins)
+    x_bins = layers.Dropout(0.5)(x_bins)
+    x_bins = layers.MaxPooling1D(2)(x_bins)
+    x_bins = layers.Conv1D(64, 3, activation='relu', padding='same')(x_bins)
+    x_bins = layers.Dropout(0.5)(x_bins)
+    x_bins = layers.MaxPooling1D(2)(x_bins)
+    x_bins = layers.LSTM(64)(x_bins) 
+    x_bins = layers.Dropout(0.5)(x_bins)
+
+
+    # --結合--
+    x = layers.concatenate([x_raw, x_bins])
+
+    # 編集距離計算に有効な特徴量を抽出(ビンデータ分の情報が増えるため次元数を上げた方が良い？この場合過学習対策推奨)
     x = layers.Dense(embedding_dim, activation='relu')(x)
 
     # バッチ正規化
     x = layers.BatchNormalization()(x)
+
+    # Dropout
+    x = layers.Dropout(0.3)(x)
         
     # L2正規化で埋め込み空間を安定化
-    x = tf.nn.l2_normalize(x, axis=-1)
+    x = layers.Lambda(lambda t: tf.nn.l2_normalize(t, axis=-1))(x)
         
-    return keras.Model(inputs=input_seq, outputs=x, name="edit_distance_encoder")
+    return keras.Model(inputs=[input_raw, input_bins], outputs=x, name="edit_distance_encoder_with_bins")
 
 # 対数変換を適用する関数
 def log_transform_with_sign(seq):
@@ -97,19 +136,29 @@ def log_transform_with_sign(seq):
     transformed_seq = np.sign(seq_np) * np.log1p(np.abs(seq_np))
     return transformed_seq.tolist()
 
-def create_comparison_classifier_model(input_shape, embedding_dim=EMBEDDING_DIM):
+def create_comparison_classifier_model_with_bins(raw_input_shape, bin_input_shape, n_bins, embedding_dim=EMBEDDING_DIM):
     # エンコーダは共通で利用
-    encoder = create_encoder_for_edit_distance(input_shape, embedding_dim)
+    encoder = create_encoder_for_edit_distance_with_bins(
+        raw_input_shape, 
+        bins_input_shape, 
+        n_bins, 
+        embedding_dim)
 
-    # 3つの入力: 数列A, 数列B, 数列C
-    input_A = keras.Input(shape=input_shape, name="input_A_comp")
-    input_B = keras.Input(shape=input_shape, name="input_B_comp")
-    input_C = keras.Input(shape=input_shape, name="input_C_comp")
+    # 3組の入力: 数列A, 数列B, 数列C，それぞれのビン化
+    inputA_raw = keras.Input(shape=raw_input_shape, name="input_A_comp")
+    inputB_raw = keras.Input(shape=raw_input_shape, name="input_B_comp")
+    inputC_raw = keras.Input(shape=raw_input_shape, name="input_C_comp")
+
+    inputA_bins = keras.Input(shape=bin_input_shape, dtype='int32', name="A_bins")
+    inputB_bins = keras.Input(shape=bin_input_shape, dtype='int32', name="B_bins")
+    inputC_bins = keras.Input(shape=bin_input_shape, dtype='int32', name="C_bins")
+
+
 
     # 各数列を埋め込みベクトルに変換
-    embedding_A = encoder(input_A)
-    embedding_B = encoder(input_B)
-    embedding_C = encoder(input_C)
+    embedding_A = encoder([inputA_raw, inputA_bins])
+    embedding_B = encoder([inputB_raw, inputB_bins])
+    embedding_C = encoder([inputC_raw, inputC_bins])
 
     # AとBのペアの距離特徴量
     features_AB = EditDistanceFriendlyFeatures()([embedding_A, embedding_B])
@@ -145,7 +194,11 @@ def create_comparison_classifier_model(input_shape, embedding_dim=EMBEDDING_DIM)
     output_layer = layers.Dense(1, activation='sigmoid', name='edit_distance_comparison_label')(x)
 
     # モデルの構築
-    model = keras.Model(inputs=[input_A, input_B, input_C], outputs=output_layer, name="siamese_comparison_classifier")
+    model = keras.Model(
+        inputs=[inputA_raw, inputA_bins, inputB_raw, inputB_bins, inputC_raw, inputC_bins], 
+        outputs=output_layer, 
+        name="siamese_comparison_classifier"
+    )
 
     # モデルのコンパイル
     model.compile(
@@ -156,14 +209,14 @@ def create_comparison_classifier_model(input_shape, embedding_dim=EMBEDDING_DIM)
     
     return model, encoder
 
-
 # --- メイン処理 ---
 if __name__ == "__main__":
-    input_shape = (MAX_SEQUENCE_LENGTH, 1)
+    raw_input_shape = (MAX_SEQUENCE_LENGTH, 1)
+    bins_input_shape = (MAX_SEQUENCE_LENGTH,)
     
     # ★ 1. ロードするデータセットファイルの指定 ★
     DATASET_FILES = [
-        "comparison_datasets/comparison_data.pkl", # generate_comparison_datasets.py で生成したファイル名に合わせる
+        "comparison_datasets/comparison_data_depth_1-10.pkl"# generate_comparison_datasets.py で生成したファイル名に合わせる
         # 例: 複数の深さの比較データを結合する場合
         # "comparison_datasets/comparison_data_depth_1-10.pkl",
         # "comparison_datasets/comparison_data_depth_11-15.pkl",
@@ -219,6 +272,7 @@ if __name__ == "__main__":
     y_labels_raw = [s['target_label'] for s in sampled_samples_raw] 
 
     # スケーリングとNumPy変換
+    # スケーリングのタイミングに注意した方が良いか，ビン化後にスケーリングする方がいい？
     X_A_scaled = np.array([log_transform_with_sign(seq) for seq in X_A_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
     X_B_scaled = np.array([log_transform_with_sign(seq) for seq in X_B_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
     X_C_scaled = np.array([log_transform_with_sign(seq) for seq in X_C_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
@@ -236,31 +290,52 @@ if __name__ == "__main__":
 
     # 訓練データとテストデータに分割
     # 3つの入力 (X_A, X_B, X_C) と1つのターゲット (y_labels)
-    X_train_A, X_test_A, X_train_B, X_test_B, X_train_C, X_test_C, \
+    X_train_A_raw, X_test_A_raw, X_train_B_raw, X_test_B_raw, X_train_C_raw, X_test_C_raw, \
     y_train, y_test = train_test_split(
         X_A_scaled, X_B_scaled, X_C_scaled, y_labels,
         test_size=1 - TRAIN_TEST_SPLIT_RATIO, 
         random_state=42,
         stratify=y_labels # 分類問題なのでstratifyでラベル分布を維持
     )
-    
+
+    # --- 5. 訓練データを用いてビン化 ---
+
+    # 訓練データから分位境界を求める
+    edges = compute_bin_edges(list(X_train_A_raw) + list(X_train_B_raw) + list(X_train_C_raw), 
+                              n_bins=N_BINS)
+
+    # 訓練データの分位境界を用いて，データを分位ビニング
+    X_train_A_bins = np.array([sequence_to_bins(seq, edges) for seq in X_train_A_raw])
+    X_train_B_bins = np.array([sequence_to_bins(seq, edges) for seq in X_train_B_raw])
+    X_train_C_bins = np.array([sequence_to_bins(seq, edges) for seq in X_train_C_raw])
+
+    X_test_A_bins = np.array([sequence_to_bins(seq, edges) for seq in X_test_A_raw])
+    X_test_B_bins = np.array([sequence_to_bins(seq, edges) for seq in X_test_B_raw])
+    X_test_C_bins = np.array([sequence_to_bins(seq, edges) for seq in X_test_C_raw])
+
+    # データ確認
     print("\nTraining and Test data shapes:")
-    print(f"X_train_A shape: {X_train_A.shape}")
-    print(f"X_train_B shape: {X_train_B.shape}")
-    print(f"X_train_C shape: {X_train_C.shape}")
+    print(f"X_train_A_raw shape: {X_train_A_raw.shape}")
+    print(f"X_train_B_raw shape: {X_train_B_raw.shape}")
+    print(f"X_train_C_raw shape: {X_train_C_raw.shape}")
+    print(f"X_train_A_bins shape: {X_train_A_bins.shape}")
+    print(f"X_train_B_bins shape: {X_train_B_bins.shape}")
+    print(f"X_train_C_bins shape: {X_train_C_bins.shape}")
     print(f"y_train shape: {y_train.shape}")
-    print(f"X_test_A shape: {X_test_A.shape}")
-    print(f"X_test_B shape: {X_test_B.shape}")
-    print(f"X_test_C shape: {X_test_C.shape}")
+    print(f"X_test_A_raw shape: {X_test_A_raw.shape}")
+    print(f"X_test_B_raw shape: {X_test_B_raw.shape}")
+    print(f"X_test_C_raw shape: {X_test_C_raw.shape}")
+    print(f"X_test_A_bins shape: {X_test_A_bins.shape}")
+    print(f"X_test_B_bins shape: {X_test_B_bins.shape}")
+    print(f"X_test_C_bins shape: {X_test_C_bins.shape}")
     print(f"y_test shape: {y_test.shape}")
 
-
     # --- 5. モデルの作成と訓練 ---
-    model, encoder = create_comparison_classifier_model(input_shape, EMBEDDING_DIM) # 新しいモデルを呼び出し
+    model, encoder = create_comparison_classifier_model_with_bins(raw_input_shape, bins_input_shape, N_BINS, EMBEDDING_DIM) # 新しいモデルを呼び出し
     
     print("\n--- Starting comparison model training ---")
     history = model.fit(
-        [X_train_A, X_train_B, X_train_C], # 3つの入力
+        [X_train_A_raw, X_train_A_bins, X_train_B_raw, X_train_B_bins, X_train_C_raw, X_train_C_bins], # 3つの入力
         y_train,
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
@@ -273,10 +348,10 @@ if __name__ == "__main__":
     print("\n--- Evaluating on Test Set (Comparison) ---")
     # model.evaluate は compile 時に指定された metrics を返す
     # accuracy, precision, recall, auc の順で受け取る
-    loss, accuracy, precision, recall, auc = model.evaluate([X_test_A, X_test_B, X_test_C], y_test, verbose=0)
+    loss, accuracy, precision, recall, auc = model.evaluate([X_test_A_raw, X_test_A_bins, X_test_B_raw, X_test_B_bins, X_test_C_raw, X_test_C_bins], y_test, verbose=0)
     
     # 予測の実行 (混同行列やF1スコア計算のため)
-    y_pred_prob = model.predict([X_test_A, X_test_B, X_test_C]).flatten()
+    y_pred_prob = model.predict([X_test_A_raw, X_test_A_bins, X_test_B_raw, X_test_B_bins, X_test_C_raw, X_test_C_bins]).flatten()
     y_pred_binary = (y_pred_prob > 0.5).astype(int) # 0.5 を閾値として二値化
 
     print(f"Test Loss: {loss:.4f}")
