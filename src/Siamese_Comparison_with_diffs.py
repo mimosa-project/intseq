@@ -9,12 +9,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
 import time
 
-# プロジェクトの他のモジュールから関数をインポート
-import program
-import generate_program
-import generate_data_set
-import weight
-
 # --- ハイパーパラメータの定義 ---
 MAX_SEQUENCE_LENGTH = 20
 EMBEDDING_DIM = 64
@@ -26,19 +20,19 @@ TRAIN_TEST_SPLIT_RATIO = 0.8
 # --- 分析に使用するサンプル数 ---
 MAX_SAMPLES_FOR_TRAINING_AND_EVALUATION = 100000 
 
+# ============================================================
+# データ前処理
+# ============================================================
 
-# --- 分位ビン化用関数 ---
-def compute_bin_edges(all_sequences, n_bins=20):
-    # 全数列を1Dに平坦化し，ビン範囲を決定
-    # 出力は境界点のリスト n_bins+1
-    all_values = np.concatenate(all_sequences)
-    edges = np.quantile(all_values, np.linspace(0, 1, n_bins+1))
-    return edges
+def compute_differences(sequence):
+    """(T,1) -> (T-1,1) 差分系列"""
+    seq1d = sequence.squeeze()
+    d = np.diff(seq1d)
+    return d[:, None].astype(np.float32)
 
-def sequence_to_bins(seq, edges):
-    bins = np.searchsorted(edges, seq, side='right') - 1
-    return np.clip(bins, 0, len(edges)-2)  # IDは0〜n_bins-1
-
+# ============================================================
+# 共通特徴量抽出レイヤー
+# ============================================================
 
 # ★ 編集距離回帰に適した距離指標を計算するカスタムレイヤー ★
 class EditDistanceFriendlyFeatures(layers.Layer):
@@ -77,10 +71,12 @@ class EditDistanceFriendlyFeatures(layers.Layer):
         
         return distance_features
 
-def create_encoder_for_edit_distance_with_bins(raw_input_shape, bins_input_shape, n_bins, embedding_dim=64):
-    """分位ビニングを追加したエンコーダー"""
+# ============================================================
+# 各エンコーダ
+# ============================================================
 
-    # --元のfloat入力部分--    
+def create_encoder_with_diffs(raw_input_shape, diffs_input_shape, embedding_dim=64):
+        # --元のfloat入力部分--    
     input_raw = keras.Input(shape=raw_input_shape, name="raw_sequence")
 
     # 位置情報を重視するためのConv1D
@@ -96,22 +92,21 @@ def create_encoder_for_edit_distance_with_bins(raw_input_shape, bins_input_shape
     x_raw = layers.Dropout(0.5)(x_raw)
           
 
-    # --ビン入力部分--
-    # 生データを同じ時系列データのため，同じ処理を通す
-    input_bins = keras.Input(shape=bins_input_shape, dtype='int32')
-    x_bins = layers.Embedding(input_dim=n_bins+1, output_dim=16)(input_bins)
-    x_bins = layers.Conv1D(32, 3, activation='relu', padding='same')(x_bins)
-    x_bins = layers.Dropout(0.5)(x_bins)
-    x_bins = layers.MaxPooling1D(2)(x_bins)
-    x_bins = layers.Conv1D(64, 3, activation='relu', padding='same')(x_bins)
-    x_bins = layers.Dropout(0.5)(x_bins)
-    x_bins = layers.MaxPooling1D(2)(x_bins)
-    x_bins = layers.LSTM(64)(x_bins) 
-    x_bins = layers.Dropout(0.5)(x_bins)
+    # --差分数列入力部分--
+    # 生データが同じ時系列データのため，同じ処理を通す
+    input_diffs = keras.Input(shape=diffs_input_shape, name='diff_sequence')
+    x_diffs = layers.Conv1D(32, 3, activation='relu', padding='same')(input_diffs)
+    x_diffs = layers.Dropout(0.5)(x_diffs)
+    x_diffs = layers.MaxPooling1D(2)(x_diffs)
+    x_diffs = layers.Conv1D(64, 3, activation='relu', padding='same')(x_diffs)
+    x_diffs = layers.Dropout(0.5)(x_diffs)
+    x_diffs = layers.MaxPooling1D(2)(x_diffs)
+    x_diffs = layers.LSTM(64)(x_diffs) 
+    x_diffs = layers.Dropout(0.5)(x_diffs)
 
 
     # --結合--
-    x = layers.concatenate([x_raw, x_bins])
+    x = layers.concatenate([x_raw, x_diffs])
 
     # 編集距離計算に有効な特徴量を抽出(ビンデータ分の情報が増えるため次元数を上げた方が良い？この場合過学習対策推奨)
     x = layers.Dense(embedding_dim, activation='relu')(x)
@@ -125,7 +120,49 @@ def create_encoder_for_edit_distance_with_bins(raw_input_shape, bins_input_shape
     # L2正規化で埋め込み空間を安定化
     x = layers.Lambda(lambda t: tf.nn.l2_normalize(t, axis=-1))(x)
         
-    return keras.Model(inputs=[input_raw, input_bins], outputs=x, name="edit_distance_encoder_with_bins")
+    return keras.Model(inputs=[input_raw, input_diffs], outputs=x, name="edit_distance_encoder_with_bins")
+
+# ============================================================
+# 三つ組比較モデル (A, B, C)
+# ============================================================
+
+def create_comparison_classifier_model(raw_input_shape, diff_input_shape, embedding_dim=64):
+    encoder = create_encoder_with_diffs(raw_input_shape, diff_input_shape, embedding_dim)
+
+    inputA_raw = keras.Input(shape=raw_input_shape, name="A_raw")
+    inputB_raw = keras.Input(shape=raw_input_shape, name="B_raw")
+    inputC_raw = keras.Input(shape=raw_input_shape, name="C_raw")
+
+    inputA_diffs = keras.Input(shape=diff_input_shape, name="A_diffs")
+    inputB_diffs = keras.Input(shape=diff_input_shape, name="B_diffs")
+    inputC_diffs = keras.Input(shape=diff_input_shape, name="C_diffs")
+
+    emb_A, emb_B, emb_C = encoder([inputA_raw, inputA_diffs]), encoder([inputB_raw, inputB_diffs]), encoder([inputC_raw, inputC_diffs])
+    inputs = [inputA_raw, inputA_diffs, inputB_raw, inputB_diffs, inputC_raw, inputC_diffs]
+
+    # A-B, A-C 特徴量
+    features_AB = EditDistanceFriendlyFeatures()([emb_A, emb_B])
+    features_AC = EditDistanceFriendlyFeatures()([emb_A, emb_C])
+    diff_features = tf.abs(features_AB - features_AC)
+    comparison_features = layers.concatenate([features_AB, features_AC, diff_features], axis=-1)
+
+    # 分類ヘッド
+    x = layers.Dense(64, activation='relu')(comparison_features)
+    x = layers.BatchNormalization()(x)
+    x = layers.Dropout(0.4)(x)
+    x = layers.Dense(32, activation='relu',
+                     kernel_regularizer=keras.regularizers.l2(0.01))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Dropout(0.2)(x)
+    output = layers.Dense(1, activation='sigmoid', name='edit_distance_comparison_label')(x)
+
+    model = keras.Model(inputs=inputs, outputs=output, name=f"siamese_comparison_with_diff")
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001, clipnorm=1.0),
+        loss='binary_crossentropy',
+        metrics=['accuracy', 'Precision', 'Recall', 'AUC']
+    )
+    return model, encoder
 
 # 対数変換を適用する関数
 def log_transform_with_sign(seq):
@@ -135,83 +172,10 @@ def log_transform_with_sign(seq):
     transformed_seq = np.sign(seq_np) * np.log1p(np.abs(seq_np))
     return transformed_seq.tolist()
 
-def create_comparison_classifier_model_with_bins(raw_input_shape, bin_input_shape, n_bins, embedding_dim=EMBEDDING_DIM):
-    # エンコーダは共通で利用
-    encoder = create_encoder_for_edit_distance_with_bins(
-        raw_input_shape, 
-        bins_input_shape, 
-        n_bins, 
-        embedding_dim)
-
-    # 3組の入力: 数列A, 数列B, 数列C，それぞれのビン化
-    inputA_raw = keras.Input(shape=raw_input_shape, name="input_A_comp")
-    inputB_raw = keras.Input(shape=raw_input_shape, name="input_B_comp")
-    inputC_raw = keras.Input(shape=raw_input_shape, name="input_C_comp")
-
-    inputA_bins = keras.Input(shape=bin_input_shape, dtype='int32', name="A_bins")
-    inputB_bins = keras.Input(shape=bin_input_shape, dtype='int32', name="B_bins")
-    inputC_bins = keras.Input(shape=bin_input_shape, dtype='int32', name="C_bins")
-
-
-
-    # 各数列を埋め込みベクトルに変換
-    embedding_A = encoder([inputA_raw, inputA_bins])
-    embedding_B = encoder([inputB_raw, inputB_bins])
-    embedding_C = encoder([inputC_raw, inputC_bins])
-
-    # AとBのペアの距離特徴量
-    features_AB = EditDistanceFriendlyFeatures()([embedding_A, embedding_B])
-    # AとCのペアの距離特徴量
-    features_AC = EditDistanceFriendlyFeatures()([embedding_A, embedding_C])
-
-    # 距離特徴量を結合し、比較のための分類ヘッドへ入力
-    # 選択肢1: 単純結合（現状）
-    # comparison_features = layers.concatenate([features_AB, features_AC], axis=-1)
-
-    # 選択肢2: 差の絶対値のみ (より直接的)
-    # comparison_features = tf.abs(features_AB - features_AC)
-
-    # 選択肢3: 結合 + 差の絶対値 (最も推奨)
-    diff_features = tf.abs(features_AB - features_AC)
-    comparison_features = layers.concatenate([features_AB, features_AC, diff_features], axis=-1) 
-
-    # 選択肢4: 結合 + 比率 (ゼロ除算注意)
-    # ratio_features = tf.math.divide_no_nan(features_AB, features_AC)
-    # comparison_features = layers.concatenate([features_AB, features_AC, ratio_features], axis=-1)
-
-
-    # 分類ヘッド
-    x = layers.Dense(64, activation='relu')(comparison_features)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)
-    x = layers.Dense(32, activation='relu',
-                     kernel_regularizer=keras.regularizers.l2(0.01)
-                     )(x)
-    x = layers.BatchNormalization()(x)
-    
-    # 最終的な出力層: 二値分類のためsigmoid活性化関数を使用
-    output_layer = layers.Dense(1, activation='sigmoid', name='edit_distance_comparison_label')(x)
-
-    # モデルの構築
-    model = keras.Model(
-        inputs=[inputA_raw, inputA_bins, inputB_raw, inputB_bins, inputC_raw, inputC_bins], 
-        outputs=output_layer, 
-        name="siamese_comparison_classifier"
-    )
-
-    # モデルのコンパイル
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001, clipnorm=1.0),
-        loss='binary_crossentropy', # 二値分類用損失関数
-        metrics=['accuracy', 'Precision', 'Recall', 'AUC'] # 分類評価指標
-    )
-    
-    return model, encoder
-
 # --- メイン処理 ---
 if __name__ == "__main__":
     raw_input_shape = (MAX_SEQUENCE_LENGTH, 1)
-    bins_input_shape = (MAX_SEQUENCE_LENGTH,)
+    diffs_input_shape = (MAX_SEQUENCE_LENGTH-1, 1)
     
     # ★ 1. ロードするデータセットファイルの指定 ★
     DATASET_FILES = [
@@ -222,7 +186,7 @@ if __name__ == "__main__":
     ]
 
     # --- 2. データセットのロードと結合 ---
-    all_raw_samples = [] 
+    all_raw_samples = []
 
     print("\n--- Loading datasets from specified files ---")
     for file_path in DATASET_FILES:
@@ -268,73 +232,111 @@ if __name__ == "__main__":
     X_A_raw = [s['numeric_sequence_A'] for s in sampled_samples_raw]
     X_B_raw = [s['numeric_sequence_B'] for s in sampled_samples_raw]
     X_C_raw = [s['numeric_sequence_C'] for s in sampled_samples_raw]
-    y_labels_raw = [s['target_label'] for s in sampled_samples_raw] 
-
-    # スケーリングとNumPy変換
-    # スケーリングのタイミングに注意した方が良いか，ビン化後にスケーリングする方がいい？
-    X_A_scaled = np.array([log_transform_with_sign(seq) for seq in X_A_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
-    X_B_scaled = np.array([log_transform_with_sign(seq) for seq in X_B_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
-    X_C_scaled = np.array([log_transform_with_sign(seq) for seq in X_C_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
-    y_labels = np.array(y_labels_raw, dtype=np.int32)
-
-    # NaN/Inf チェックの追加
-    if np.any(np.isnan(X_A_scaled)): print("DEBUG: NaN found in X_A_scaled!")
-    if np.any(np.isinf(X_A_scaled)): print("DEBUG: Inf found in X_A_scaled!")
-    if np.any(np.isnan(X_B_scaled)): print("DEBUG: NaN found in X_B_scaled!")
-    if np.any(np.isinf(X_B_scaled)): print("DEBUG: Inf found in X_B_scaled!")
-    if np.any(np.isnan(X_C_scaled)): print("DEBUG: NaN found in X_C_scaled!")
-    if np.any(np.isinf(X_C_scaled)): print("DEBUG: Inf found in X_C_scaled!")
-    if np.any(np.isnan(y_labels)): print("DEBUG: NaN found in y_labels!")
-    if np.any(np.isinf(y_labels)): print("DEBUG: Inf found in y_labels!")
+    y_labels_raw = [s['target_label'] for s in sampled_samples_raw]
 
     # 訓練データとテストデータに分割
     # 3つの入力 (X_A, X_B, X_C) と1つのターゲット (y_labels)
     X_train_A_raw, X_test_A_raw, X_train_B_raw, X_test_B_raw, X_train_C_raw, X_test_C_raw, \
     y_train, y_test = train_test_split(
-        X_A_scaled, X_B_scaled, X_C_scaled, y_labels,
+        X_A_raw, X_B_raw, X_C_raw, y_labels_raw,
         test_size=1 - TRAIN_TEST_SPLIT_RATIO, 
         random_state=42,
-        stratify=y_labels # 分類問題なのでstratifyでラベル分布を維持
+        stratify=y_labels_raw # 分類問題なのでstratifyでラベル分布を維持
     )
 
-    # --- 5. 訓練データを用いてビン化 ---
+    # 訓練データ前処理
+    # 差分数列作成
+    X_train_A_raw = np.array(X_train_A_raw, dtype=np.float32)
+    X_train_B_raw = np.array(X_train_B_raw, dtype=np.float32)
+    X_train_C_raw = np.array(X_train_C_raw, dtype=np.float32)
+    X_train_A_diffs = compute_differences(X_train_A_raw)
+    X_train_B_diffs = compute_differences(X_train_B_raw)
+    X_train_C_diffs = compute_differences(X_train_C_raw)
 
-    # 訓練データから分位境界を求める
-    edges = compute_bin_edges(list(X_train_A_raw) + list(X_train_B_raw) + list(X_train_C_raw), 
-                              n_bins=N_BINS)
+    # スケーリングとNumPy変換
+    # スケーリングのタイミングに注意した方が良い？
+    X_train_A_raw = np.array([log_transform_with_sign(seq) for seq in X_train_A_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
+    X_train_A_diffs = np.array([log_transform_with_sign(seq) for seq in X_train_A_diffs], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH-1, 1)
+    X_train_B_raw = np.array([log_transform_with_sign(seq) for seq in X_train_B_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
+    X_train_B_diffs = np.array([log_transform_with_sign(seq) for seq in X_train_B_diffs], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH-1, 1)
+    X_train_C_raw = np.array([log_transform_with_sign(seq) for seq in X_train_C_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
+    X_train_C_diffs = np.array([log_transform_with_sign(seq) for seq in X_train_C_diffs], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH-1, 1)
+    y_train = np.array(y_train, dtype=np.int32)
 
-    # 訓練データの分位境界を用いて，データを分位ビニング
-    X_train_A_bins = np.array([sequence_to_bins(seq, edges) for seq in X_train_A_raw])
-    X_train_B_bins = np.array([sequence_to_bins(seq, edges) for seq in X_train_B_raw])
-    X_train_C_bins = np.array([sequence_to_bins(seq, edges) for seq in X_train_C_raw])
+    # NaN/Inf チェックの追加
+    if np.any(np.isnan(X_train_A_raw)): print("DEBUG: NaN found in X_train_A_raw!")
+    if np.any(np.isinf(X_train_A_raw)): print("DEBUG: Inf found in X_train_A_raw!")
+    if np.any(np.isnan(X_train_A_diffs)): print("DEBUG: NaN found in X_train_A_diffs!")
+    if np.any(np.isinf(X_train_A_diffs)): print("DEBUG: Inf found in X_train_A_diffs!")
+    if np.any(np.isnan(X_train_B_raw)): print("DEBUG: NaN found in X_train_B_raw!")
+    if np.any(np.isinf(X_train_B_raw)): print("DEBUG: Inf found in X_train_B_raw!")
+    if np.any(np.isnan(X_train_B_diffs)): print("DEBUG: NaN found in X_train_B_diffs!")
+    if np.any(np.isinf(X_train_B_diffs)): print("DEBUG: Inf found in X_train_B_diffs!")
+    if np.any(np.isnan(X_train_C_raw)): print("DEBUG: NaN found in X_train_C_raw!")
+    if np.any(np.isinf(X_train_C_raw)): print("DEBUG: Inf found in X_train_C_raw!")
+    if np.any(np.isnan(X_train_C_diffs)): print("DEBUG: NaN found in X_train_C_diffs!")
+    if np.any(np.isinf(X_train_C_diffs)): print("DEBUG: Inf found in X_train_C_diffs!")
+    if np.any(np.isnan(y_train)): print("DEBUG: NaN found in y_labels!")
+    if np.any(np.isinf(y_train)): print("DEBUG: Inf found in y_labels!")
 
-    X_test_A_bins = np.array([sequence_to_bins(seq, edges) for seq in X_test_A_raw])
-    X_test_B_bins = np.array([sequence_to_bins(seq, edges) for seq in X_test_B_raw])
-    X_test_C_bins = np.array([sequence_to_bins(seq, edges) for seq in X_test_C_raw])
+    # テストデータ前処理
+    # 差分数列作成
+    X_test_A_raw = np.array(X_test_A_raw, dtype=np.float32)
+    X_test_B_raw = np.array(X_test_B_raw, dtype=np.float32)
+    X_test_C_raw = np.array(X_test_C_raw, dtype=np.float32)
+    X_test_A_diffs = compute_differences(X_test_A_raw)
+    X_test_B_diffs = compute_differences(X_test_B_raw)
+    X_test_C_diffs = compute_differences(X_test_C_raw)
+
+    # スケーリングとNumPy変換
+    # スケーリングのタイミングに注意した方が良い？
+    X_test_A_raw = np.array([log_transform_with_sign(seq) for seq in X_test_A_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
+    X_test_A_diffs = np.array([log_transform_with_sign(seq) for seq in X_test_A_diffs], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH-1, 1)
+    X_test_B_raw = np.array([log_transform_with_sign(seq) for seq in X_test_B_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
+    X_test_B_diffs = np.array([log_transform_with_sign(seq) for seq in X_test_B_diffs], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH-1, 1)
+    X_test_C_raw = np.array([log_transform_with_sign(seq) for seq in X_test_C_raw], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH, 1)
+    X_test_C_diffs = np.array([log_transform_with_sign(seq) for seq in X_test_C_diffs], dtype=np.float32).reshape(-1, MAX_SEQUENCE_LENGTH-1, 1)
+    y_test = np.array(y_test, dtype=np.int32)
+
+    # NaN/Inf チェックの追加
+    if np.any(np.isnan(X_test_A_raw)): print("DEBUG: NaN found in X_test_A_raw!")
+    if np.any(np.isinf(X_test_A_raw)): print("DEBUG: Inf found in X_test_A_raw!")
+    if np.any(np.isnan(X_test_A_diffs)): print("DEBUG: NaN found in X_test_A_diffs!")
+    if np.any(np.isinf(X_test_A_diffs)): print("DEBUG: Inf found in X_test_A_diffs!")
+    if np.any(np.isnan(X_test_B_raw)): print("DEBUG: NaN found in X_test_B_raw!")
+    if np.any(np.isinf(X_test_B_raw)): print("DEBUG: Inf found in X_test_B_raw!")
+    if np.any(np.isnan(X_test_B_diffs)): print("DEBUG: NaN found in X_test_B_diffs!")
+    if np.any(np.isinf(X_test_B_diffs)): print("DEBUG: Inf found in X_test_B_diffs!")
+    if np.any(np.isnan(X_test_C_raw)): print("DEBUG: NaN found in X_test_C_raw!")
+    if np.any(np.isinf(X_test_C_raw)): print("DEBUG: Inf found in X_test_C_raw!")
+    if np.any(np.isnan(X_test_C_diffs)): print("DEBUG: NaN found in X_test_C_diffs!")
+    if np.any(np.isinf(X_test_C_diffs)): print("DEBUG: Inf found in X_test_C_diffs!")
+    if np.any(np.isnan(y_test)): print("DEBUG: NaN found in y_labels!")
+    if np.any(np.isinf(y_test)): print("DEBUG: Inf found in y_labels!")
 
     # データ確認
     print("\nTraining and Test data shapes:")
     print(f"X_train_A_raw shape: {X_train_A_raw.shape}")
+    print(f"X_train_A_raw shape: {X_train_A_diffs.shape}")
     print(f"X_train_B_raw shape: {X_train_B_raw.shape}")
+    print(f"X_train_B_raw shape: {X_train_B_diffs.shape}")
     print(f"X_train_C_raw shape: {X_train_C_raw.shape}")
-    print(f"X_train_A_bins shape: {X_train_A_bins.shape}")
-    print(f"X_train_B_bins shape: {X_train_B_bins.shape}")
-    print(f"X_train_C_bins shape: {X_train_C_bins.shape}")
+    print(f"X_train_C_raw shape: {X_train_C_diffs.shape}")
     print(f"y_train shape: {y_train.shape}")
     print(f"X_test_A_raw shape: {X_test_A_raw.shape}")
+    print(f"X_test_A_raw shape: {X_test_A_diffs.shape}")
     print(f"X_test_B_raw shape: {X_test_B_raw.shape}")
+    print(f"X_test_B_raw shape: {X_test_B_diffs.shape}")
     print(f"X_test_C_raw shape: {X_test_C_raw.shape}")
-    print(f"X_test_A_bins shape: {X_test_A_bins.shape}")
-    print(f"X_test_B_bins shape: {X_test_B_bins.shape}")
-    print(f"X_test_C_bins shape: {X_test_C_bins.shape}")
+    print(f"X_test_C_raw shape: {X_test_C_diffs.shape}")
     print(f"y_test shape: {y_test.shape}")
 
     # --- 5. モデルの作成と訓練 ---
-    model, encoder = create_comparison_classifier_model_with_bins(raw_input_shape, bins_input_shape, N_BINS, EMBEDDING_DIM) # 新しいモデルを呼び出し
+    model, encoder = create_comparison_classifier_model(raw_input_shape, diffs_input_shape, EMBEDDING_DIM)
     
     print("\n--- Starting comparison model training ---")
     history = model.fit(
-        [X_train_A_raw, X_train_A_bins, X_train_B_raw, X_train_B_bins, X_train_C_raw, X_train_C_bins], # 3つの入力
+        [X_train_A_raw, X_train_A_diffs, X_train_B_raw, X_train_B_diffs, X_train_C_raw, X_train_C_diffs], # 3つの入力
         y_train,
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
@@ -347,10 +349,10 @@ if __name__ == "__main__":
     print("\n--- Evaluating on Test Set (Comparison) ---")
     # model.evaluate は compile 時に指定された metrics を返す
     # accuracy, precision, recall, auc の順で受け取る
-    loss, accuracy, precision, recall, auc = model.evaluate([X_test_A_raw, X_test_A_bins, X_test_B_raw, X_test_B_bins, X_test_C_raw, X_test_C_bins], y_test, verbose=0)
+    loss, accuracy, precision, recall, auc = model.evaluate([X_test_A_raw, X_test_A_diffs, X_test_B_raw, X_test_B_diffs, X_test_C_raw, X_test_C_diffs], y_test, verbose=0)
     
     # 予測の実行 (混同行列やF1スコア計算のため)
-    y_pred_prob = model.predict([X_test_A_raw, X_test_A_bins, X_test_B_raw, X_test_B_bins, X_test_C_raw, X_test_C_bins]).flatten()
+    y_pred_prob = model.predict([X_test_A_raw, X_test_A_diffs, X_test_B_raw, X_test_B_diffs, X_test_C_raw, X_test_C_diffs]).flatten()
     y_pred_binary = (y_pred_prob > 0.5).astype(int) # 0.5 を閾値として二値化
 
     print(f"Test Loss: {loss:.4f}")
