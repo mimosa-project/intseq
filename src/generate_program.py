@@ -114,39 +114,117 @@ class ProgramGenerator:
         self.information_amount : int = 0
         self.root_node : Node = None
     
-    def select_randam_tokens(self, num:int, is_leaf=False):
+    def select_random_tokens(self, num:int, is_leaf=False, must_have_args=False):
         '''
         引数の制限が一致しているトークンの中から
         weight.WEIGHTS.get_Token_weights()に応じた確率でnum個のトークンを返す
+        - is_leaf: 葉トークン（引数なし）のみを選択
+        - must_have_args: 引数を取るトークン（演算子）のみを選択
+        選択されたトークンリストと、その選択に使用されたトークンセットの合計重みを返す。
         '''
-        if is_leaf:
-            return random.choices(weight.WEIGHTS.get_leaf_tokens(), weights=weight.WEIGHTS.get_leaf_weights(), k=num)
-        else:
-            return random.choices(weight.WEIGHTS.get_tokens(), weights=weight.WEIGHTS.get_weights(), k=num)
+        
+        if is_leaf: # 葉ノード（深さ上限到達時）
+            tokens = random.choices(weight.WEIGHTS.get_leaf_tokens(), weights=weight.WEIGHTS.get_leaf_weights(), k=num)
+            return tokens, weight.WEIGHTS.get_leaf_weight_sum() # 葉ノードの合計重み
+        elif must_have_args: # 強制パスで、深さ上限未到達時、引数を取るトークンのみを選択
+            # weight.pyから演算子のトークンと重みを取得
+            valid_operator_tokens = weight.WEIGHTS.get_operator_tokens()
+            valid_operator_weights = weight.WEIGHTS.get_operator_weights()
+            operator_weight_sum = weight.WEIGHTS.get_operator_weight_sum()
+
+            if not valid_operator_tokens:
+                raise ValueError("No operator tokens available with positive weights. Cannot build tree to specified depth.")
+
+            tokens = random.choices(valid_operator_tokens, weights=valid_operator_weights, k=num)
+            return tokens, operator_weight_sum # 演算子の合計重み
+        else: # 通常の選択（引数なしトークンも含む）
+            tokens = random.choices(weight.WEIGHTS.get_tokens(), weights=weight.WEIGHTS.get_weights(), k=num)
+            return tokens, weight.WEIGHTS.get_weight_sum() # 全トークンの合計重み
     
-    def build_tree(self, node=None, depth=0):
+    def build_tree(self, node=None, depth=0, force_deep_path=True): # 新しい引数 force_deep_path を追加
+        # 1. ルートノードの処理
         if node is None:
-            # root node
-            token = self.select_randam_tokens(1)
-            self.root_node = Node(token[0])
-            self.add_information_amount(math.log(weight.WEIGHTS.get_weight_sum()/weight.WEIGHTS.get_Token_weights()[token[0]], 2))
-            self.build_tree(self.root_node, depth+1)
+            if self.max_depth < 1:
+                raise ValueError("max_depth must be at least 1 for a valid program tree.")
             
+            # ルートノードは常に引数を取るトークンから選択 (深さ1でツリーが終わるのを防ぐ)
+            # max_depthが1の場合、ルートが演算子なら、その子ノードは強制的に葉になる
+            token, current_weight_sum = self.select_random_tokens(1, must_have_args=True)
+            self.root_node = Node(token[0])
+            self.add_information_amount(math.log(current_weight_sum / weight.WEIGHTS.get_Token_weights()[token[0]], 2))
+            
+            # ここで force_deep_path を True にして最初の呼び出しを行う
+            self.build_tree(self.root_node, depth + 1, force_deep_path=True) 
+            
+        # 2. 子ノードの処理
         else:
-            assert depth <= self.max_depth
+            # 現在の深さが目標の最大深さに達しているかチェック
+            if depth == self.max_depth:
+                # 最大深さに達したら、必ず葉ノード（引数なしのトークン）のみを選択
+                arg_num = TOKEN_ARG_COUNTS[node.token]
+                if arg_num == 0: # 既に葉ノードになっている場合（論理的にはありえない）
+                    return
+                
+                tokens, current_weight_sum = self.select_random_tokens(arg_num, is_leaf=True) # 葉ノードのみを選択
+                for token in tokens:
+                    self.add_information_amount(math.log(current_weight_sum / weight.WEIGHTS.get_Token_weights()[token], 2))
+                    child_node = Node(token)
+                    node.append_child_node(child_node)
+                return # この深さでツリー構築は終了
+            
+            # 最大深さに達していない場合
             arg_num = TOKEN_ARG_COUNTS[node.token]
             if arg_num == 0:
-                return
+                # このケースは、force_deep_path が True のパスでは発生しないはず
+                # force_deep_path が False のパスで、たまたま葉ノードが選ばれた場合はOK
+                return # この枝の構築はここで終了
+
+            # 子ノードを生成する前に、どのトークンタイプを選ぶか決定
+            # force_deep_path が True の場合、少なくとも1つの子ノードは引数を取るトークンでなければならない
+            # それ以外の子ノードは、葉ノードを含む任意のトークンを選択できる
+
+            # 子ノードのリストを準備
+            child_tokens_to_build = []
             
-            is_leaf = (depth == self.max_depth)
-            tokens = self.select_randam_tokens(arg_num, is_leaf=is_leaf)
-            weight_sum = weight.WEIGHTS.get_leaf_weight_sum() if is_leaf else weight.WEIGHTS.get_weight_sum()
-            for token in tokens:
-                self.add_information_amount(math.log(weight_sum/weight.WEIGHTS.get_Token_weights()[token], 2))
+            # 強制的に深くなるパス (force_deep_path が True の場合のみ)
+            if force_deep_path:
+                # 少なくとも1つの子ノードは引数を取るトークンでなければならない
+                # このパスに選ばれるトークンは演算子のみ
+                operator_token_for_deep_path, operator_weight_sum = self.select_random_tokens(1, must_have_args=True)
+                child_tokens_to_build.append({'token': operator_token_for_deep_path[0], 'force_deep': True, 'weight_sum_for_info': operator_weight_sum})
+                
+                # 残りの子ノードはランダムな深さでOK
+                remaining_args = arg_num - 1
+                for _ in range(remaining_args):
+                    random_token, total_weight_sum = self.select_random_tokens(1) # 通常の選択なので全トークンの合計重み # 引数なしも含む
+                    child_tokens_to_build.append({'token': random_token[0], 'force_deep': False, 'weight_sum_for_info': total_weight_sum})
+            else:
+                # force_deep_path が False の場合、全ての子ノードはランダムな深さでOK
+                for _ in range(arg_num):
+                    random_token, total_weight_sum = self.select_random_tokens(1) # 通常の選択なので全トークンの合計重み
+                    child_tokens_to_build.append({'token': random_token[0], 'force_deep': False, 'weight_sum_for_info': total_weight_sum})
+
+            # シャッフルしてランダム性を確保
+            random.shuffle(child_tokens_to_build)
+
+            # 各子ノードを再帰的に構築
+            for item in child_tokens_to_build:
+                token = item['token']
+                force_deep_for_child = item['force_deep']
+                current_weight_sum = item['weight_sum_for_info'] # 適切な合計重みを取得
+
+                # 情報量の加算
+                # 情報量計算に取得した current_weight_sum を使用
+                self.add_information_amount(math.log(current_weight_sum / weight.WEIGHTS.get_Token_weights()[token], 2))
+                
                 child_node = Node(token)
                 node.append_child_node(child_node)
-                if not is_leaf:
-                    self.build_tree(child_node, depth+1)
+                
+                # トークンが引数を取る場合のみ再帰呼び出し
+                if TOKEN_ARG_COUNTS[token] > 0:
+                    self.build_tree(child_node, depth + 1, force_deep_path=force_deep_for_child)
+                # 引数を取らない場合（葉ノード）は、ここで再帰は終了し、ツリーの枝がここで終わる
+    
             
     # トークン名の変換テーブル（アルファベット→トークン名）
     TOKEN_MAP = [
@@ -210,8 +288,6 @@ class ProgramGenerator:
             token_tree_stack.append(Node(token=token, child_nodes=child_nodes))
         
         return token_tree_stack
-    
-
     
     def add_information_amount(self, information_amount): # 引数の値だけinformation_amountに加算
         self.information_amount += information_amount
